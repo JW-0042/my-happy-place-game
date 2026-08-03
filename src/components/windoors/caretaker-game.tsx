@@ -14,8 +14,11 @@ import {
   Check,
   Disc3,
   Download,
+  ExternalLink,
   HardDrive,
+  Lock,
   RefreshCw,
+  RotateCw,
   Search,
   Settings2,
   Volume2,
@@ -25,6 +28,7 @@ import {
 import {
   APP_KEYS,
   BIOS_BSOD_CHANCE,
+  BROWSER_HOME,
   COLOR_STYLES,
   CREATOR_X_HANDLE,
   CREATOR_X_URL,
@@ -100,16 +104,18 @@ function defaultWindowSize(appKey: AppKey): { w: number; h: number } {
     appKey === "defrag" ||
     appKey === "support" ||
     appKey === "bios" ||
-    appKey === "chkdsk";
+    appKey === "chkdsk" ||
+    appKey === "browser";
   const tall =
     appKey === "chkdsk" ||
     appKey === "update" ||
     appKey === "bios" ||
     appKey === "support" ||
-    appKey === "defrag";
+    appKey === "defrag" ||
+    appKey === "browser";
   return {
-    w: wide ? 560 : 480,
-    h: tall ? 560 : 460,
+    w: appKey === "browser" ? 720 : wide ? 560 : 480,
+    h: appKey === "browser" ? 640 : tall ? 560 : 460,
   };
 }
 
@@ -584,7 +590,7 @@ export function CaretakerGame() {
   const startTask = useCallback(
     (winId: string, appKey: AppKey) => {
       // Remote Support uses Call/Finish, not the normal progress task
-      if (appKey === "support") return;
+      if (appKey === "support" || appKey === "browser") return;
 
       if (appKey === "scan") {
         const canScan =
@@ -928,7 +934,11 @@ export function CaretakerGame() {
           .map((x) => x.appKey!),
       );
       const candidates = APP_KEYS.filter(
-        (k) => k !== "support" && !runningKeys.has(k) && !pendingKeys.has(k),
+        (k) =>
+          k !== "support" &&
+          k !== "browser" &&
+          !runningKeys.has(k) &&
+          !pendingKeys.has(k),
       );
       if (candidates.length === 0) {
         timer = window.setTimeout(spawn, Math.random() * 8000 + 5000);
@@ -1868,6 +1878,8 @@ function AppWindow({
         )}
       </>
     );
+  } else if (win.appKey === "browser") {
+    body = <BrowserPanel styles={styles} />;
   } else if (win.appKey === "chkdsk") {
     body = (
       <ChkdskPanel
@@ -1956,7 +1968,13 @@ function AppWindow({
           </button>
         )}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-zinc-950 p-4 sm:p-6">
+      <div
+        className={`min-h-0 flex-1 overscroll-contain bg-zinc-950 ${
+          win.appKey === "browser"
+            ? "flex flex-col overflow-hidden p-0"
+            : "overflow-y-auto p-4 sm:p-6"
+        }`}
+      >
         {body}
       </div>
 
@@ -2182,6 +2200,92 @@ const CHKDSK_DRIVES: {
   { id: "C:", label: "Local Disk (C:)", hint: "System volume", Icon: HardDrive },
   { id: "D:", label: "New volume (D:)", hint: "Data partition", Icon: HardDrive },
 ];
+
+
+
+function BrowserPanel({
+  styles,
+}: {
+  styles: (typeof COLOR_STYLES)[keyof typeof COLOR_STYLES];
+}) {
+  const [key, setKey] = useState(0);
+  const [failed, setFailed] = useState(false);
+  const url = BROWSER_HOME;
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* Chrome bar */}
+      <div className="flex shrink-0 items-center gap-2 border-b border-white/10 bg-zinc-900 px-2 py-2 sm:px-3">
+        <button
+          type="button"
+          title="Home"
+          aria-label="Home"
+          onClick={() => {
+            setFailed(false);
+            setKey((k) => k + 1);
+          }}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-white/70 hover:bg-white/10 hover:text-white"
+        >
+          <RotateCw className="h-4 w-4" />
+        </button>
+        <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-white/10 bg-black/40 px-3 py-1.5">
+          <Lock className="h-3.5 w-3.5 shrink-0 text-emerald-400/80" />
+          <span className="truncate font-mono text-[11px] text-white/80 sm:text-xs">{url}</span>
+        </div>
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Open in system browser"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-white/70 hover:bg-white/10 hover:text-white"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <ExternalLink className="h-4 w-4" />
+        </a>
+      </div>
+      <p className="shrink-0 border-b border-white/5 bg-zinc-950 px-3 py-1 text-[10px] text-white/40">
+        Internet Discovery · restricted catalog · only approved intranet destination allowed
+      </p>
+
+      <div className="relative min-h-0 flex-1 bg-white">
+        {failed && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-zinc-950 p-6 text-center">
+            <p className="text-sm text-white/70">
+              This site refused to embed (or the network is offline). Open it in a full browser window.
+            </p>
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`inline-flex items-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-semibold text-white ${styles.button}`}
+            >
+              <ExternalLink className="h-4 w-4" />
+              Open macrohard.space
+            </a>
+          </div>
+        )}
+        <iframe
+          key={key}
+          title="Internet Discovery Browser"
+          src={url}
+          className="h-full min-h-[280px] w-full border-0"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
+          referrerPolicy="no-referrer-when-downgrade"
+          onError={() => setFailed(true)}
+          onLoad={(e) => {
+            // blank/error documents sometimes still fire load — leave failed false if loaded
+            try {
+              const doc = (e.target as HTMLIFrameElement).contentDocument;
+              if (doc && doc.location.href === "about:blank") setFailed(true);
+            } catch {
+              // cross-origin: assume ok
+            }
+          }}
+        />
+      </div>
+    </div>
+  );
+}
 
 function ChkdskPanel({
   win,

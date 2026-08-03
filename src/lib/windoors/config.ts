@@ -5,6 +5,7 @@ import {
   Cpu,
   Download,
   FileCheck,
+  Globe,
   HardDrive,
   Headphones,
   Microchip,
@@ -22,7 +23,8 @@ export type AppKey =
   | "drivers"
   | "startup"
   | "bios"
-  | "support";
+  | "support"
+  | "browser";
 
 export type ColorKey =
   | "blue"
@@ -34,7 +36,8 @@ export type ColorKey =
   | "sky"
   | "rose"
   | "orange"
-  | "cyan";
+  | "cyan"
+  | "slate";
 
 /** Full static Tailwind class maps — dynamic `text-${color}-400` never works with Tailwind. */
 export const COLOR_STYLES: Record<
@@ -116,6 +119,13 @@ export const COLOR_STYLES: Record<
     button: "bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400",
     border: "border-cyan-400/60 bg-cyan-950/80",
     badgeBg: "from-cyan-500 to-sky-400",
+  },
+  slate: {
+    icon: "text-slate-300",
+    bar: "#94a3b8",
+    button: "bg-gradient-to-r from-slate-600 to-slate-500 hover:from-slate-500 hover:to-slate-400",
+    border: "border-slate-400/60 bg-slate-950/80",
+    badgeBg: "from-slate-500 to-zinc-400",
   },
 };
 
@@ -232,6 +242,16 @@ export const TASKS: Record<AppKey, TaskConfig> = {
     phases: ["Connected"],
     notifyTitle: "Support available",
   },
+  browser: {
+    key: "browser",
+    name: "Internet Discovery Browser",
+    shortName: "Browser",
+    icon: Globe,
+    color: "slate",
+    duration: 1,
+    phases: ["Browsing"],
+    notifyTitle: "Browse the intranet",
+  },
 };
 
 export const APP_KEYS = Object.keys(TASKS) as AppKey[];
@@ -260,7 +280,7 @@ export const VERSION_BASE = "11.3";
  * **Bump +1 on every shippable change** from now on.
  * Displayed as: 11.3.XXXXX
  */
-export const BUILD = 1;
+export const BUILD = 4;
 
 /** Full version string: 11.3.00001, 11.3.00002, … */
 export const VERSION = `${VERSION_BASE}.${String(BUILD).padStart(5, "0")}`;
@@ -273,3 +293,6 @@ export const BIOS_BSOD_CHANCE = 0.32;
 
 export const CREATOR_X_URL = "https://x.com/thimothybsirius";
 export const CREATOR_X_HANDLE = "x.com/thimothybsirius";
+
+/** Only page Internet Discovery Browser is allowed to open by default. */
+export const BROWSER_HOME = "https://macrohard.space/";
