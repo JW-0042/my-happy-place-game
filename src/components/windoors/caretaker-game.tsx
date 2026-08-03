@@ -1508,8 +1508,8 @@ export function CaretakerGame() {
             <Volume2 className="h-3.5 w-3.5 text-white/70" />
             <BatteryFull className="h-3.5 w-3.5 text-emerald-400" />
             <ChevronUp className={`h-3.5 w-3.5 transition ${actionCenterOpen ? "rotate-180" : ""}`} />
-            {toasts.some((t) => t.kind === "task" && !t.leaving) && (
-              <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-red-400" />
+            {toasts.some((t) => t.kind === "success" && !t.leaving) && (
+              <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-emerald-400" />
             )}
           </button>
 
@@ -1635,50 +1635,37 @@ export function CaretakerGame() {
 
           <div className="mt-3">
             <p className="mb-2 px-0.5 text-[10px] font-semibold uppercase tracking-wider text-white/45">
-              Notifications
+              Completions
             </p>
-            {toasts.filter((t) => !t.leaving).length === 0 ? (
+            {toasts.filter((t) => t.kind === "success" && !t.leaving).length === 0 ? (
               <p className="rounded-xl bg-white/5 px-3 py-4 text-center text-xs text-white/40">
-                No new notifications
+                No completed tasks yet
               </p>
             ) : (
               <div className="space-y-2">
                 {toasts
-                  .filter((t) => !t.leaving)
+                  .filter((t) => t.kind === "success" && !t.leaving)
                   .map((toast) => (
                     <div
                       key={toast.id}
-                      className="flex gap-2 rounded-xl border border-white/10 bg-zinc-900/90 p-3"
+                      className="flex gap-2 rounded-xl border border-emerald-400/25 bg-emerald-950/40 p-3"
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{toast.title}</p>
-                        <p className="mt-0.5 text-[11px] text-white/50">
-                          {toast.body ||
-                            (toast.kind === "task"
-                              ? `${PRODUCT_NAME} needs attention`
-                              : "Notification")}
+                        <p className="truncate text-sm font-medium text-emerald-200">{toast.title}</p>
+                        <p className="mt-0.5 text-[11px] text-white/55">
+                          {toast.body || "Task finished successfully"}
                         </p>
                       </div>
-                      {toast.kind === "task" && toast.appKey ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            dismissToast(toast.id, toast.appKey);
-                            setActionCenterOpen(false);
-                          }}
-                          className="shrink-0 rounded-lg bg-white px-3 py-1.5 text-[10px] font-semibold text-black"
-                        >
-                          FIX
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => dismissToast(toast.id)}
-                          className="shrink-0 rounded-lg bg-white/15 px-3 py-1.5 text-[10px] font-medium"
-                        >
-                          OK
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          dismissToast(toast.id, toast.appKey);
+                          setActionCenterOpen(false);
+                        }}
+                        className="shrink-0 rounded-lg bg-emerald-400 px-3 py-1.5 text-[10px] font-semibold text-black"
+                      >
+                        OPEN
+                      </button>
                     </div>
                   ))}
               </div>
@@ -1780,16 +1767,22 @@ export function CaretakerGame() {
       )}
 
       <div
-        className="toast-stack pointer-events-none fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] left-2 right-2 z-[80] hidden flex-col-reverse gap-2 sm:bottom-16 sm:left-auto sm:right-6 sm:flex sm:w-80 sm:max-w-[calc(100vw-1.5rem)] sm:gap-2.5"
+        className="toast-stack pointer-events-none fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] left-2 right-2 z-[80] flex flex-col-reverse gap-2 sm:bottom-16 sm:left-auto sm:right-6 sm:w-80 sm:max-w-[calc(100vw-1.5rem)] sm:gap-2.5"
       >
-        {toasts.map((toast) => (
-          <ToastCard
-            key={toast.id}
-            toast={toast}
-            onDismiss={() => dismissToast(toast.id)}
-            onFix={() => dismissToast(toast.id, toast.appKey)}
-          />
-        ))}
+        {toasts
+          .filter((toast) => {
+            // Mobile: only urgent task / welcome popups; success stays in Action Center
+            if (isMobile && toast.kind === "success") return false;
+            return true;
+          })
+          .map((toast) => (
+            <ToastCard
+              key={toast.id}
+              toast={toast}
+              onDismiss={() => dismissToast(toast.id)}
+              onFix={() => dismissToast(toast.id, toast.appKey)}
+            />
+          ))}
       </div>
 
       {bsod && (
