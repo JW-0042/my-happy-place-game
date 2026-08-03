@@ -45,7 +45,7 @@ import {
   type UpdateScenario,
 } from "@/lib/windoors/updates";
 
-type UpdateUiPhase = "needs-check" | "checking" | "ready" | "installing" | "complete";
+type UpdateUiPhase = "needs-check" | "checking" | "ready" | "installing" | "up-to-date";
 
 type WindowState = {
   id: string;
@@ -78,7 +78,7 @@ type WindowState = {
 
 type Toast = {
   id: string;
-  kind: "task" | "welcome" | "info";
+  kind: "task" | "welcome" | "info" | "success";
   appKey?: AppKey;
   title: string;
   body?: string;
@@ -325,6 +325,7 @@ export function CaretakerGame() {
   const [bsod, setBsod] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [batteryOpen, setBatteryOpen] = useState(false);
   const [booted, setBooted] = useState(false);
   const [bootScreen, setBootScreen] = useState(true);
   const isMobile = useIsNarrow(640);
@@ -817,22 +818,35 @@ export function CaretakerGame() {
             return;
           }
 
-          setWindows((list) =>
-            list.map((w) =>
-              w.id === winId
-                ? {
-                    ...w,
-                    running: false,
-                    complete: true,
-                    progress: 100,
-                    phase: "Complete",
-                    updateUi: appKey === "update" ? "complete" : w.updateUi,
-                    updateActivePkg:
-                      appKey === "update" ? Math.max(0, w.updatePackages.length - 1) : w.updateActivePkg,
-                  }
-                : w,
-            ),
-          );
+          // Update stays open on "up to date"; every other tool closes after success toast
+          if (appKey === "update") {
+            setWindows((list) =>
+              list.map((w) =>
+                w.id === winId
+                  ? {
+                      ...w,
+                      running: false,
+                      complete: false,
+                      progress: 0,
+                      phase: "You're up to date",
+                      updateUi: "up-to-date" as const,
+                      updateActivePkg: -1,
+                      logLines: [],
+                    }
+                  : w,
+              ),
+            );
+          } else {
+            // Close without cancel penalty
+            setWindows((list) =>
+              list.map((w) =>
+                w.id === winId ? { ...w, closing: true, running: false, complete: false } : w,
+              ),
+            );
+            window.setTimeout(() => {
+              setWindows((list) => list.filter((w) => w.id !== winId));
+            }, 300);
+          }
           applyHealth(24);
           if (appKey === "update") markDefinitionsFreshFromUpdate();
           if (appKey === "scan") {
@@ -841,6 +855,25 @@ export function CaretakerGame() {
               if (Math.random() < 0.7) markDefinitionsStale();
             }, 8000 + Math.random() * 12000);
           }
+          const doneId = nextId("done");
+          setToasts((t) => [
+            ...t.slice(-4),
+            {
+              id: doneId,
+              kind: "success" as const,
+              appKey,
+              title: `${cfg.name} complete`,
+              body: "+24 system health restored",
+            },
+          ]);
+          window.setTimeout(() => {
+            setToasts((list) =>
+              list.map((x) => (x.id === doneId ? { ...x, leaving: true } : x)),
+            );
+            window.setTimeout(() => {
+              setToasts((list) => list.filter((x) => x.id !== doneId));
+            }, 350);
+          }, 9000);
           return;
         }
 
@@ -1012,6 +1045,7 @@ export function CaretakerGame() {
         setStartOpen(false);
         setSearchOpen(false);
         setCalendarOpen(false);
+        setBatteryOpen(false);
       }}
     >
       {bootScreen && (
@@ -1223,6 +1257,7 @@ export function CaretakerGame() {
               setStartOpen((v) => !v);
               setSearchOpen(false);
               setCalendarOpen(false);
+              setBatteryOpen(false);
             }}
             className="flex h-11 w-11 items-center justify-center rounded-2xl text-white transition-all hover:bg-white/10 active:scale-95 sm:h-10 sm:w-10"
           >
@@ -1234,6 +1269,7 @@ export function CaretakerGame() {
               setSearchOpen((v) => !v);
               setStartOpen(false);
               setCalendarOpen(false);
+              setBatteryOpen(false);
             }}
             className="hidden h-9 w-48 items-center rounded-3xl bg-white/10 px-4 text-sm transition-all hover:bg-white/20 sm:flex sm:w-72 lg:w-80"
           >
@@ -1264,18 +1300,56 @@ export function CaretakerGame() {
             );
           })}
         </div>
-        <div className="flex shrink-0 items-center gap-1.5 pr-1 sm:gap-4 sm:pr-4">
-          <div className="hidden items-center gap-3 text-sm sm:flex">
-            <Wifi className="h-4 w-4" />
-            <Volume2 className="h-4 w-4" />
-            <BatteryFull className="h-4 w-4" />
+        <div className="flex shrink-0 items-center gap-1 pr-1 sm:gap-2 sm:pr-4">
+          <div className="hidden items-center gap-1 text-sm sm:flex">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg text-white/80">
+              <Wifi className="h-4 w-4" />
+            </span>
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg text-white/80">
+              <Volume2 className="h-4 w-4" />
+            </span>
+            <button
+              type="button"
+              aria-label="Battery status"
+              aria-expanded={batteryOpen}
+              onClick={() => {
+                setBatteryOpen((v) => !v);
+                setStartOpen(false);
+                setSearchOpen(false);
+                setCalendarOpen(false);
+              }}
+              className={`flex h-9 items-center gap-1 rounded-lg px-2 text-white/90 transition hover:bg-white/10 ${
+                batteryOpen ? "bg-white/15" : ""
+              }`}
+            >
+              <BatteryFull className="h-4 w-4 text-emerald-400" />
+              <span className="text-[11px] font-medium tabular-nums">100%</span>
+            </button>
           </div>
+          {/* Mobile battery control */}
+          <button
+            type="button"
+            aria-label="Battery status"
+            aria-expanded={batteryOpen}
+            onClick={() => {
+              setBatteryOpen((v) => !v);
+              setStartOpen(false);
+              setSearchOpen(false);
+              setCalendarOpen(false);
+            }}
+            className={`flex h-11 w-11 items-center justify-center rounded-2xl text-emerald-400 transition hover:bg-white/10 sm:hidden ${
+              batteryOpen ? "bg-white/15" : ""
+            }`}
+          >
+            <BatteryFull className="h-5 w-5" />
+          </button>
           <button
             type="button"
             onClick={() => {
               setCalendarOpen((v) => !v);
               setStartOpen(false);
               setSearchOpen(false);
+              setBatteryOpen(false);
             }}
             className="min-h-11 min-w-[2.75rem] text-right leading-none sm:min-h-0"
           >
@@ -1287,6 +1361,45 @@ export function CaretakerGame() {
           </div>
         </div>
       </div>
+
+      {batteryOpen && (
+        <div
+          className="fixed bottom-[4.25rem] right-2 z-[75] w-[min(100vw-1rem,300px)] overflow-hidden rounded-2xl border border-white/10 bg-[#1c1c1e]/95 shadow-2xl backdrop-blur-xl sm:bottom-16 sm:right-4"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="border-b border-white/10 px-4 py-3.5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/20">
+                <BatteryFull className="h-6 w-6 text-emerald-400" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-semibold tabular-nums tracking-tight">100%</span>
+                  <span className="text-xs font-medium text-emerald-400">Plugged in</span>
+                </div>
+                <p className="mt-0.5 text-[11px] text-white/50">System battery · Windoors Power</p>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-3 px-4 py-3.5">
+            <div>
+              <div className="mb-1.5 h-2 overflow-hidden rounded-full bg-white/10">
+                <div className="h-full w-full rounded-full bg-emerald-400" />
+              </div>
+              <p className="text-[12px] leading-relaxed text-white/75">
+                Charged to 100% for over <span className="font-semibold text-white">3369 days</span>.
+              </p>
+              <p className="mt-1.5 text-[12px] leading-relaxed text-white/60">
+                Battery health is <span className="font-semibold text-amber-300">42%</span>.
+                <span className="text-white/45"> Chemistry still reports full charge — please do not ask how.</span>
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-[11px] text-white/50">
+              Estimated time remaining: forever* (AC adapter detected)
+            </div>
+          </div>
+        </div>
+      )}
 
       {startOpen && (
         <div className="fixed bottom-[4.25rem] left-2 right-2 z-[70] max-h-[min(70dvh,520px)] overflow-hidden overflow-y-auto rounded-3xl border border-white/10 bg-zinc-900/98 shadow-2xl backdrop-blur-3xl sm:bottom-16 sm:left-4 sm:right-auto sm:w-[min(100vw-1rem,460px)]" onClick={(e) => e.stopPropagation()}>
@@ -1345,7 +1458,7 @@ export function CaretakerGame() {
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className={`toast-enter flex w-full gap-3 rounded-2xl border border-white/10 bg-zinc-900/98 p-3.5 shadow-2xl backdrop-blur-xl transition-all sm:w-80 sm:max-w-full sm:rounded-3xl sm:p-5 ${toast.leaving ? "translate-x-8 opacity-0 sm:translate-x-20" : ""} ${toast.kind === "welcome" ? "border-emerald-400/50 bg-emerald-950/95" : ""}`}
+            className={`toast-enter flex w-full gap-3 rounded-2xl border border-white/10 bg-zinc-900/98 p-3.5 shadow-2xl backdrop-blur-xl transition-all sm:w-80 sm:max-w-full sm:rounded-3xl sm:p-5 ${toast.leaving ? "translate-x-8 opacity-0 sm:translate-x-20" : ""} ${toast.kind === "welcome" || toast.kind === "success" ? "border-emerald-400/50 bg-emerald-950/95" : ""}`}
             onClick={(e) => e.stopPropagation()}
           >
             {toast.kind === "task" && toast.appKey ? (
@@ -1365,6 +1478,29 @@ export function CaretakerGame() {
                 </div>
                 <button type="button" onClick={() => dismissToast(toast.id, toast.appKey)} className="shrink-0 rounded-2xl bg-white px-4 py-2.5 text-xs font-semibold text-black active:scale-95 sm:py-2">
                   FIX NOW
+                </button>
+              </>
+            ) : toast.kind === "success" && toast.appKey ? (
+              <>
+                <div className="min-w-0 flex-1">
+                  {(() => {
+                    const cfg = TASKS[toast.appKey!];
+                    const Icon = cfg.icon;
+                    return (
+                      <div className="flex items-center gap-2">
+                        <Icon className={`h-4 w-4 shrink-0 ${COLOR_STYLES[cfg.color].icon}`} />
+                        <span className="truncate font-semibold text-emerald-300">{toast.title}</span>
+                      </div>
+                    );
+                  })()}
+                  <p className="mt-1 text-xs text-white/55">{toast.body || "Task finished successfully"}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => dismissToast(toast.id, toast.appKey)}
+                  className="shrink-0 rounded-2xl bg-emerald-400 px-4 py-2.5 text-xs font-semibold text-black active:scale-95 sm:py-2"
+                >
+                  OPEN
                 </button>
               </>
             ) : (
@@ -1572,38 +1708,7 @@ function AppWindow({
   };
 
   let body: ReactNode;
-  if (win.complete) {
-    body = (
-      <div className="py-8 text-center sm:py-10">
-        <div className="completion-check mb-5 text-emerald-400 sm:mb-6" aria-hidden>
-          <Check className="mx-auto h-16 w-16 stroke-[3] text-emerald-400 sm:h-20 sm:w-20" />
-        </div>
-        <h2 className="text-xl font-semibold text-emerald-400 sm:text-2xl">{cfg.name} Complete</h2>
-        <p className="mt-2 text-sm text-white/50">
-          {win.appKey === "defrag"
-            ? "Fragmentation: 0%  ·  +24 health"
-            : win.appKey === "update"
-              ? `${win.updateHeadline || "Updates"} installed  ·  +24 health`
-              : "System health restored (+24)"}
-        </p>
-        {win.appKey === "update" && win.updatePackages.length > 0 && (
-          <ul className="mx-auto mt-4 max-w-md space-y-1 px-2 text-left text-[11px] text-white/55">
-            {win.updatePackages.map((p) => (
-              <li key={p.id} className="truncate">✓ {p.title}</li>
-            ))}
-          </ul>
-        )}
-        {win.appKey === "defrag" && (
-          <div className="mx-auto mt-5 max-w-md px-2">
-            <DefragMap progress={100} running={false} seed={win.defragSeed} />
-          </div>
-        )}
-        <button type="button" onClick={onCloseIdle} className="mt-6 rounded-3xl bg-emerald-500 px-8 py-3 text-sm font-medium hover:bg-emerald-600 sm:mt-8 sm:px-10">
-          Close
-        </button>
-      </div>
-    );
-  } else if (win.appKey === "scan" && win.needsUpdateFirst && !win.running) {
+  if (win.appKey === "scan" && win.needsUpdateFirst && !win.running) {
     body = (
       <>
         <div className="mb-4 text-center font-medium text-amber-400">Definitions outdated</div>
@@ -1929,6 +2034,35 @@ function UpdatePanel({
   const needsCheck = win.updateUi === "needs-check";
   const ready = win.updateUi === "ready";
   const installing = win.updateUi === "installing" || win.running;
+  const upToDate = win.updateUi === "up-to-date";
+
+  if (upToDate) {
+    return (
+      <>
+        <div className={`mb-3 text-center text-sm font-medium ${styles.icon}`}>
+          {win.phase || "You're up to date"}
+        </div>
+        <div className="mb-5 rounded-2xl border border-emerald-400/35 bg-emerald-950/40 p-5 text-center sm:p-6">
+          <Check className="mx-auto h-12 w-12 text-emerald-400 sm:h-14 sm:w-14" strokeWidth={2.5} />
+          <h3 className="mt-3 text-lg font-semibold text-emerald-300">All updates are installed</h3>
+          <p className="mt-2 text-sm text-white/60">
+            This device has the latest 08-2026 packages. You're protected — until the next catalog wave.
+          </p>
+          {win.updateHeadline && (
+            <p className="mt-3 text-[11px] text-white/40">Last installed: {win.updateHeadline}</p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onCheck}
+          className="flex w-full items-center justify-center gap-2 rounded-3xl border border-white/15 bg-white/5 py-4 text-sm font-semibold text-white transition hover:bg-white/10"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Check for updates
+        </button>
+      </>
+    );
+  }
 
   return (
     <>
@@ -2000,7 +2134,7 @@ function UpdatePanel({
         </div>
       )}
 
-      {!installing && !win.complete && (
+      {!installing && (
         <div className="flex flex-col gap-2">
           {(needsCheck || ready || checking) && (
             <button
@@ -2163,7 +2297,7 @@ function ChkdskPanel({
         </div>
         {showOptions && (
           <div className="mt-2 rounded-xl border border-white/10 bg-zinc-900/80 p-3 text-[11px] text-white/60">
-            <p className="font-medium text-white/80">Advanced options (nostalgia pack)</p>
+            <p className="font-medium text-white/80">Advanced options</p>
             <ul className="mt-1.5 list-disc space-y-1 pl-4">
               <li>System / hidden files are always checked</li>
               <li>Write-testing free space is simulated only</li>
