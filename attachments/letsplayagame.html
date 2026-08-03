@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Win11 Caretaker v7 • Complete Edition</title>
+    
+    <!-- Tailwind CDN + Official Config (fixes the production warning) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            content: ["**/*"],
+            theme: { extend: {} }
+        };
+    </script>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;500;600&display=swap');
+        
+        body { font-family: 'Segoe UI', system-ui, sans-serif; }
+        #desktop { background-image: url('https://4kwallpapers.com/images/wallpapers/windows-11-abstract-3840x2160-5570.jpg'); background-size: cover; background-position: center; }
+
+        /* ==================== ADVANCED ANIMATIONS ==================== */
+        .window {
+            box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.5);
+            transform-style: preserve-3d;
+            perspective: 1200px;
+            animation: windowAdvancedPop 480ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+        @keyframes windowAdvancedPop {
+            0%   { opacity: 0; transform: scale(0.65) rotateX(28deg) translateY(80px); }
+            45%  { transform: scale(1.08) rotateX(-8deg) translateY(-12px); }
+            70%  { transform: scale(0.96) rotateX(4deg) translateY(6px); }
+            100% { opacity: 1; transform: scale(1) rotateX(0deg) translateY(0); }
+        }
+        .window.closing {
+            animation: windowAdvancedClose 320ms cubic-bezier(0.4, 0, 1, 1) forwards;
+        }
+        @keyframes windowAdvancedClose {
+            to { opacity: 0; transform: scale(0.88) rotateX(-12deg) translateY(40px); }
+        }
+
+        .progress-container { position: relative; overflow: hidden; border-radius: 9999px; }
+        .progress-bar {
+            position: relative;
+            background: linear-gradient(90deg, var(--bar-color, #22c55e), #86efac);
+        }
+        .progress-bar::before {
+            content: ''; position: absolute; inset: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.75), transparent);
+            animation: advancedShimmer 1.6s linear infinite;
+        }
+        @keyframes advancedShimmer { 0% { transform: translateX(-180%); } 100% { transform: translateX(280%); } }
+
+        .terminal { font-family: 'Courier New', monospace; position: relative; overflow: hidden; }
+        .scan-line {
+            position: absolute; left: 0; right: 0; height: 3px;
+            background: linear-gradient(transparent, #22c55e, transparent);
+            box-shadow: 0 0 18px #22c55e;
+            animation: scanningLine 1.8s linear infinite;
+        }
+        @keyframes scanningLine { 0% { top: 0%; } 100% { top: 100%; } }
+
+        .ripple-btn { position: relative; overflow: hidden; }
+        .ripple-btn::after {
+            content: ''; position: absolute; width: 40px; height: 40px;
+            background: rgba(255,255,255,0.35); border-radius: 50%;
+            transform: scale(0); animation: rippleAnim 620ms ease-out forwards;
+        }
+        @keyframes rippleAnim { to { transform: scale(4); opacity: 0; } }
+
+        .toast { animation: toastAdvancedPop 520ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+        @keyframes toastAdvancedPop {
+            0% { opacity: 0; transform: translate(140px, 60px) rotate(6deg); }
+            100% { opacity: 1; transform: translate(0, 0) rotate(0deg); }
+        }
+
+        .completion-check { animation: checkBurst 680ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+        @keyframes checkBurst {
+            0% { transform: scale(0.1) rotate(-45deg); }
+            40% { transform: scale(1.35) rotate(15deg); }
+            70% { transform: scale(0.92) rotate(-8deg); }
+            100% { transform: scale(1) rotate(0deg); }
+        }
+
+        .health-critical { animation: heartbeat 1.2s ease-in-out infinite; }
+        @keyframes heartbeat { 0%,100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+
+        .titlebar { background: linear-gradient(to right, #1e2937, #334155); }
+        .taskbar { background: rgba(15, 23, 42, 0.92); backdrop-filter: blur(28px); }
+    </style>
+</head>
+<body class="overflow-hidden text-white">
+
+<!-- DESKTOP -->
+<div id="desktop" class="h-screen w-screen relative flex items-center justify-center overflow-hidden">
+
+    <!-- Desktop Icons -->
+    <div class="absolute left-8 top-8 grid grid-cols-2 gap-x-14 gap-y-10">
+        <div onclick="openApp('update')" class="icon flex flex-col items-center cursor-pointer w-20 text-center transition-all hover:-rotate-6 hover:scale-110 active:scale-95">
+            <div class="w-14 h-14 bg-gradient-to-br from-blue-500 to-cyan-400 rounded-2xl flex items-center justify-center shadow-inner text-3xl"><i class="fa-solid fa-download"></i></div>
+            <p class="mt-2 text-xs font-medium drop-shadow-md">Windows Update</p>
+        </div>
+        <div onclick="openApp('scan')" class="icon flex flex-col items-center cursor-pointer w-20 text-center transition-all hover:rotate-6 hover:scale-110 active:scale-95">
+            <div class="w-14 h-14 bg-gradient-to-br from-green-500 to-emerald-400 rounded-2xl flex items-center justify-center shadow-inner text-3xl"><i class="fa-solid fa-shield-halved"></i></div>
+            <p class="mt-2 text-xs font-medium drop-shadow-md">Windows Security</p>
+        </div>
+        <div onclick="openApp('defrag')" class="icon flex flex-col items-center cursor-pointer w-20 text-center transition-all hover:-rotate-4 hover:scale-110 active:scale-95">
+            <div class="w-14 h-14 bg-gradient-to-br from-amber-500 to-yellow-400 rounded-2xl flex items-center justify-center shadow-inner text-3xl"><i class="fa-solid fa-hard-drive"></i></div>
+            <p class="mt-2 text-xs font-medium drop-shadow-md">Optimize Drives</p>
+        </div>
+        <div onclick="openApp('cleanup')" class="icon flex flex-col items-center cursor-pointer w-20 text-center transition-all hover:rotate-4 hover:scale-110 active:scale-95">
+            <div class="w-14 h-14 bg-gradient-to-br from-purple-500 to-violet-400 rounded-2xl flex items-center justify-center shadow-inner text-3xl"><i class="fa-solid fa-broom"></i></div>
+            <p class="mt-2 text-xs font-medium drop-shadow-md">Disk Cleanup</p>
+        </div>
+        <div onclick="openApp('chkdsk')" class="icon flex flex-col items-center cursor-pointer w-20 text-center transition-all hover:-rotate-6 hover:scale-110 active:scale-95">
+            <div class="w-14 h-14 bg-gradient-to-br from-teal-500 to-cyan-400 rounded-2xl flex items-center justify-center shadow-inner text-3xl"><i class="fa-solid fa-circle-check"></i></div>
+            <p class="mt-2 text-xs font-medium drop-shadow-md">Check Disk</p>
+        </div>
+        <div onclick="openApp('sfc')" class="icon flex flex-col items-center cursor-pointer w-20 text-center transition-all hover:rotate-6 hover:scale-110 active:scale-95">
+            <div class="w-14 h-14 bg-gradient-to-br from-indigo-500 to-violet-400 rounded-2xl flex items-center justify-center shadow-inner text-3xl"><i class="fa-solid fa-file-shield"></i></div>
+            <p class="mt-2 text-xs font-medium drop-shadow-md">System File Checker</p>
+        </div>
+        <div onclick="openApp('drivers')" class="icon flex flex-col items-center cursor-pointer w-20 text-center transition-all hover:-rotate-4 hover:scale-110 active:scale-95">
+            <div class="w-14 h-14 bg-gradient-to-br from-sky-500 to-blue-400 rounded-2xl flex items-center justify-center shadow-inner text-3xl"><i class="fa-solid fa-microchip"></i></div>
+            <p class="mt-2 text-xs font-medium drop-shadow-md">Driver Updater</p>
+        </div>
+        <div onclick="openApp('startup')" class="icon flex flex-col items-center cursor-pointer w-20 text-center transition-all hover:rotate-4 hover:scale-110 active:scale-95">
+            <div class="w-14 h-14 bg-gradient-to-br from-rose-500 to-pink-400 rounded-2xl flex items-center justify-center shadow-inner text-3xl"><i class="fa-solid fa-bolt"></i></div>
+            <p class="mt-2 text-xs font-medium drop-shadow-md">Startup Optimizer</p>
+        </div>
+    </div>
+
+    <!-- Health Widget -->
+    <div id="health-widget" class="absolute top-8 right-8 bg-black/40 backdrop-blur-2xl rounded-3xl p-5 w-72 shadow-2xl border border-white/10">
+        <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-3"><i class="fa-solid fa-heart-pulse text-red-400 text-xl"></i><span class="font-semibold text-sm tracking-widest">SYSTEM HEALTH</span></div>
+            <span id="health-text" class="font-mono text-3xl font-bold text-emerald-400">100</span>
+        </div>
+        <div class="h-3 bg-white/10 rounded-3xl overflow-hidden"><div id="health-bar" class="h-3 bg-gradient-to-r from-emerald-400 to-cyan-400 rounded-3xl w-full"></div></div>
+        <p id="health-status" class="text-xs text-center mt-2 text-emerald-400 font-medium">OPTIMAL</p>
+    </div>
+
+    <!-- Windows Container -->
+    <div id="windows-container" class="absolute inset-0 pointer-events-none"></div>
+</div>
+
+<!-- TASKBAR -->
+<div class="taskbar fixed bottom-0 left-0 right-0 h-14 flex items-center px-3 z-50 border-t border-white/10">
+    <div class="flex items-center h-full gap-1">
+        <button onclick="toggleStartMenu()" class="w-10 h-10 hover:bg-white/10 flex items-center justify-center rounded-2xl transition-all active:scale-95"><i class="fa-brands fa-windows text-2xl"></i></button>
+        <div onclick="fakeSearch()" class="w-80 h-9 bg-white/10 hover:bg-white/20 rounded-3xl flex items-center px-4 text-sm cursor-pointer transition-all"><i class="fa-solid fa-magnifying-glass mr-3"></i><span class="text-white/70">Search maintenance tools...</span></div>
+    </div>
+    <div class="flex-1 flex justify-center items-center gap-1">
+        <button onclick="openApp('update')" class="w-9 h-9 flex items-center justify-center hover:bg-white/10 rounded-2xl transition-all active:scale-95"><i class="fa-solid fa-download"></i></button>
+        <button onclick="openApp('scan')" class="w-9 h-9 flex items-center justify-center hover:bg-white/10 rounded-2xl transition-all active:scale-95"><i class="fa-solid fa-shield-halved"></i></button>
+        <button onclick="openApp('defrag')" class="w-9 h-9 flex items-center justify-center hover:bg-white/10 rounded-2xl transition-all active:scale-95"><i class="fa-solid fa-hard-drive"></i></button>
+        <button onclick="openApp('cleanup')" class="w-9 h-9 flex items-center justify-center hover:bg-white/10 rounded-2xl transition-all active:scale-95"><i class="fa-solid fa-broom"></i></button>
+        <button onclick="openApp('chkdsk')" class="w-9 h-9 flex items-center justify-center hover:bg-white/10 rounded-2xl transition-all active:scale-95"><i class="fa-solid fa-circle-check"></i></button>
+        <button onclick="openApp('sfc')" class="w-9 h-9 flex items-center justify-center hover:bg-white/10 rounded-2xl transition-all active:scale-95"><i class="fa-solid fa-file-shield"></i></button>
+        <button onclick="openApp('drivers')" class="w-9 h-9 flex items-center justify-center hover:bg-white/10 rounded-2xl transition-all active:scale-95"><i class="fa-solid fa-microchip"></i></button>
+        <button onclick="openApp('startup')" class="w-9 h-9 flex items-center justify-center hover:bg-white/10 rounded-2xl transition-all active:scale-95"><i class="fa-solid fa-bolt"></i></button>
+    </div>
+    <div class="flex items-center gap-4 pr-4">
+        <div class="flex items-center gap-4 text-sm"><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-volume-high"></i><i class="fa-solid fa-battery-full"></i></div>
+        <div onclick="toggleCalendar()" class="text-right leading-none cursor-pointer">
+            <div id="clock" class="text-sm font-medium">12:34</div>
+            <div id="date" class="text-[10px] text-white/60">March 12</div>
+        </div>
+        <div class="w-6 h-6 bg-emerald-400/20 rounded-2xl flex items-center justify-center"><div id="mini-health" class="text-[10px] font-bold text-emerald-400">100</div></div>
+    </div>
+</div>
+
+<!-- START MENU -->
+<div id="start-menu" class="hidden fixed bottom-16 left-4 w-[460px] bg-zinc-900/95 backdrop-blur-3xl rounded-3xl shadow-2xl border border-white/10 p-6 z-50">
+    <div class="text-xs uppercase tracking-widest text-white/60 mb-3 pl-2">Real Windows 11 Tools</div>
+    <div class="grid grid-cols-4 gap-3">
+        <div onclick="openApp('update');toggleStartMenu()" class="bg-zinc-800 hover:bg-zinc-700 rounded-2xl p-4 flex flex-col items-center cursor-pointer transition-all active:scale-95"><i class="fa-solid fa-download text-4xl text-blue-400 mb-2"></i><span class="text-xs">Update</span></div>
+        <div onclick="openApp('scan');toggleStartMenu()" class="bg-zinc-800 hover:bg-zinc-700 rounded-2xl p-4 flex flex-col items-center cursor-pointer transition-all active:scale-95"><i class="fa-solid fa-shield-halved text-4xl text-green-400 mb-2"></i><span class="text-xs">Scan</span></div>
+        <div onclick="openApp('defrag');toggleStartMenu()" class="bg-zinc-800 hover:bg-zinc-700 rounded-2xl p-4 flex flex-col items-center cursor-pointer transition-all active:scale-95"><i class="fa-solid fa-hard-drive text-4xl text-amber-400 mb-2"></i><span class="text-xs">Defrag</span></div>
+        <div onclick="openApp('cleanup');toggleStartMenu()" class="bg-zinc-800 hover:bg-zinc-700 rounded-2xl p-4 flex flex-col items-center cursor-pointer transition-all active:scale-95"><i class="fa-solid fa-broom text-4xl text-purple-400 mb-2"></i><span class="text-xs">Cleanup</span></div>
+        <div onclick="openApp('chkdsk');toggleStartMenu()" class="bg-zinc-800 hover:bg-zinc-700 rounded-2xl p-4 flex flex-col items-center cursor-pointer transition-all active:scale-95"><i class="fa-solid fa-circle-check text-4xl text-teal-400 mb-2"></i><span class="text-xs">Check Disk</span></div>
+        <div onclick="openApp('sfc');toggleStartMenu()" class="bg-zinc-800 hover:bg-zinc-700 rounded-2xl p-4 flex flex-col items-center cursor-pointer transition-all active:scale-95"><i class="fa-solid fa-file-shield text-4xl text-indigo-400 mb-2"></i><span class="text-xs">SFC</span></div>
+        <div onclick="openApp('drivers');toggleStartMenu()" class="bg-zinc-800 hover:bg-zinc-700 rounded-2xl p-4 flex flex-col items-center cursor-pointer transition-all active:scale-95"><i class="fa-solid fa-microchip text-4xl text-sky-400 mb-2"></i><span class="text-xs">Drivers</span></div>
+        <div onclick="openApp('startup');toggleStartMenu()" class="bg-zinc-800 hover:bg-zinc-700 rounded-2xl p-4 flex flex-col items-center cursor-pointer transition-all active:scale-95"><i class="fa-solid fa-bolt text-4xl text-rose-400 mb-2"></i><span class="text-xs">Startup</span></div>
+    </div>
+</div>
+
+<!-- NOTIFICATIONS -->
+<div id="notifications" class="fixed bottom-20 right-6 space-y-3 z-50"></div>
+
+<!-- BSOD -->
+<div id="bsod" class="hidden fixed inset-0 z-[9999] bg-[#0078d7] flex flex-col items-center justify-center text-center p-8">
+    <div class="max-w-md">
+        <div class="text-8xl mb-8">💀</div>
+        <h1 class="text-4xl font-bold mb-4">Your PC ran into a problem</h1>
+        <p class="text-xl mb-8">You ignored too many maintenance tasks.<br>Health reached 0%.</p>
+        <button onclick="restartGame()" class="bg-white text-[#0078d7] font-semibold px-12 py-4 rounded-3xl text-lg transition-all active:scale-95">RESTART PC</button>
+    </div>
+</div>
+
+<script>
+    let health = 100;
+    let windowCounter = 0;
+
+    const taskConfig = {
+        update: { name: "Windows Update", icon: "fa-download", color: "blue", duration: 52000, phases: ["Checking", "Downloading", "Installing", "Finalizing"] },
+        scan: { name: "Windows Security", icon: "fa-shield-halved", color: "green", duration: 34000, phases: ["Memory", "Files", "Registry", "Threats"] },
+        defrag: { name: "Optimize Drives", icon: "fa-hard-drive", color: "amber", duration: 68000, phases: ["Analyzing", "Defragmenting", "Optimizing", "Done"] },
+        cleanup: { name: "Disk Cleanup", icon: "fa-broom", color: "purple", duration: 17000, phases: ["Calculating", "Cleaning", "Removing"] },
+        chkdsk: { name: "Check Disk", icon: "fa-circle-check", color: "teal", duration: 29000, phases: ["Index", "Files", "Security", "Recovery", "Complete"] },
+        sfc: { name: "System File Checker", icon: "fa-file-shield", color: "indigo", duration: 43000, phases: ["Scanning", "Verifying", "Repairing"] },
+        drivers: { name: "Driver Updater", icon: "fa-microchip", color: "sky", duration: 31000, phases: ["Scanning", "Downloading", "Installing"] },
+        startup: { name: "Startup Optimizer", icon: "fa-bolt", color: "rose", duration: 15000, phases: ["Analyzing", "Disabling", "Optimizing"] }
+    };
+
+    function createWindow(appKey) {
+        const cfg = taskConfig[appKey];
+        const win = document.createElement('div');
+        win.className = `window absolute bg-zinc-900 border border-zinc-700 rounded-3xl w-[480px] overflow-hidden pointer-events-auto`;
+        win.style.left = `${100 + windowCounter * 42}px`;
+        win.style.top = `${70 + windowCounter * 42}px`;
+        win.dataset.app = appKey;
+
+        let contentHTML = `
+            <div class="titlebar h-11 flex items-center px-4 cursor-move" onmousedown="startDrag(event, this.parentElement)">
+                <i class="fa-solid ${cfg.icon} text-${cfg.color}-400 mr-3"></i>
+                <span class="flex-1 font-medium text-sm">${cfg.name}</span>
+                <button onclick="cancelTask(this)" class="px-3 py-1 text-xs hover:bg-red-500 rounded">Cancel</button>
+            </div>
+            <div class="p-6 bg-zinc-950">
+                <div id="stage-${appKey}" class="text-center text-${cfg.color}-400 font-medium mb-4"></div>
+        `;
+
+        switch(appKey) {
+            case 'update':
+                contentHTML += `<div class="bg-blue-950 border border-blue-400 rounded-2xl p-5 text-xs mb-6"><div class="flex justify-between"><span>24H2 • 3.1 GB</span><span id="eta-${appKey}">ETA 4 min</span></div></div>`;
+                break;
+            case 'scan':
+                contentHTML += `<div id="scan-log" class="h-40 bg-black/60 rounded-2xl p-3 text-xs overflow-auto mb-6"></div>`;
+                break;
+            case 'chkdsk':
+            case 'sfc':
+                contentHTML += `<div id="terminal-${appKey}" class="terminal h-52 bg-black p-4 text-emerald-300 text-xs overflow-auto mb-6"></div>`;
+                break;
+            case 'drivers':
+                contentHTML += `<div id="driver-list" class="space-y-3 mb-6"></div>`;
+                break;
+        }
+
+        contentHTML += `
+                <button onclick="startRealisticTask(this, '${appKey}')" class="ripple-btn w-full py-5 bg-gradient-to-r from-${cfg.color}-600 to-${cfg.color}-500 text-lg font-semibold rounded-3xl">START ${cfg.name.toUpperCase()}</button>
+                <div id="progress-container-${appKey}" class="hidden mt-6">
+                    <div class="progress-container h-3 bg-zinc-800"><div id="bar-${appKey}" class="progress-bar h-3 w-0" style="--bar-color: rgb(234 179 8);"></div></div>
+                    <div id="percent-${appKey}" class="text-center text-xs mt-3">0%</div>
+                </div>
+            </div>
+        `;
+
+        win.innerHTML = contentHTML;
+        document.getElementById('windows-container').appendChild(win);
+        windowCounter++;
+        return win;
+    }
+
+    function startRealisticTask(btn, appKey) {
+        btn.classList.add('ripple-btn');
+        setTimeout(() => btn.classList.remove('ripple-btn'), 700);
+        btn.style.display = 'none';
+
+        const container = document.getElementById(`progress-container-${appKey}`);
+        container.classList.remove('hidden');
+
+        const cfg = taskConfig[appKey];
+        let duration = cfg.duration + (Math.random() * 8000 - 4000);
+        let startTime = Date.now();
+        let phaseIndex = 0;
+
+        const bar = document.getElementById(`bar-${appKey}`);
+        const percentEl = document.getElementById(`percent-${appKey}`);
+        const stageEl = document.getElementById(`stage-${appKey}`);
+
+        const interval = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            let progress = Math.min(100, (elapsed / duration) * 100);
+
+            bar.style.width = `${progress}%`;
+            percentEl.textContent = `${Math.floor(progress)}%`;
+
+            // Phase updates
+            const newPhase = Math.floor(progress / (100 / cfg.phases.length));
+            if (newPhase > phaseIndex) {
+                phaseIndex = newPhase;
+                if (stageEl) stageEl.textContent = cfg.phases[phaseIndex - 1] || "";
+            }
+
+            // Tool-specific live effects
+            if (appKey === 'scan') {
+                const log = document.getElementById('scan-log');
+                if (log.children.length < 8 && Math.random() < 0.4) {
+                    log.innerHTML += `<div class="text-emerald-400">✓ Scanned ${["ntdll.dll","temp.tmp","registry.key"][Math.floor(Math.random()*3)]}</div>`;
+                    log.scrollTop = 9999;
+                }
+            }
+            if (appKey === 'update') {
+                const eta = document.getElementById(`eta-${appKey}`);
+                if (eta) eta.textContent = `ETA ${Math.max(0, Math.ceil((duration - elapsed)/60000))} min`;
+            }
+            if ((appKey === 'chkdsk' || appKey === 'sfc') && document.getElementById(`terminal-${appKey}`)) {
+                const term = document.getElementById(`terminal-${appKey}`);
+                if (Math.random() < 0.25 && term.children.length < 6) {
+                    term.innerHTML += `<div>${appKey === 'chkdsk' ? 'Stage ' + (term.children.length + 1) : 'Verifying files...'}</div>`;
+                    term.scrollTop = 9999;
+                }
+            }
+
+            if (progress >= 100) {
+                clearInterval(interval);
+                health = Math.min(100, health + 24);
+                updateHealthUI();
+                showCompletionScreen(appKey);
+            }
+        }, 45);
+    }
+
+    function showCompletionScreen(appKey) {
+        const win = document.querySelector(`.window[data-app="${appKey}"]`);
+        if (!win) return;
+        const inner = win.querySelector('.bg-zinc-950');
+        inner.innerHTML = `
+            <div class="text-center py-12">
+                <div class="completion-check text-7xl mb-6 text-emerald-400">✅</div>
+                <h2 class="text-2xl font-semibold text-emerald-400">${taskConfig[appKey].name} Complete</h2>
+                <button onclick="this.closest('.window').classList.add('closing'); setTimeout(()=>this.closest('.window').remove(),280)" class="mt-8 px-10 py-3 bg-emerald-500 hover:bg-emerald-600 rounded-3xl text-sm">Close</button>
+            </div>
+        `;
+    }
+
+    function cancelTask(btn) {
+        const win = btn.closest('.window');
+        if (win) {
+            win.classList.add('closing');
+            health = Math.max(0, health - 14);
+            updateHealthUI();
+            setTimeout(() => win.remove(), 320);
+        }
+    }
+
+    function openApp(appKey) {
+        if (document.querySelector(`.window[data-app="${appKey}"]`)) return;
+        createWindow(appKey);
+    }
+
+    function startDrag(e, win) {
+        if (e.target.tagName === 'BUTTON') return;
+        const offsetX = e.clientX - win.getBoundingClientRect().left;
+        const offsetY = e.clientY - win.getBoundingClientRect().top;
+        const move = (ev) => { win.style.left = (ev.clientX - offsetX) + 'px'; win.style.top = (ev.clientY - offsetY) + 'px'; };
+        const stop = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', stop); };
+        document.addEventListener('mousemove', move);
+        document.addEventListener('mouseup', stop);
+    }
+
+    function updateHealthUI() {
+        const bar = document.getElementById('health-bar');
+        const text = document.getElementById('health-text');
+        const mini = document.getElementById('mini-health');
+        const status = document.getElementById('health-status');
+        const widget = document.getElementById('health-widget');
+
+        bar.style.width = health + '%';
+        text.textContent = Math.floor(health);
+        mini.textContent = Math.floor(health);
+
+        if (health > 75) { status.textContent = 'OPTIMAL'; status.style.color = '#34d399'; widget.classList.remove('health-critical'); }
+        else if (health > 40) { status.textContent = 'NEEDS ATTENTION'; status.style.color = '#f59e0b'; widget.classList.remove('health-critical'); }
+        else { status.textContent = 'CRITICAL'; status.style.color = '#f87171'; widget.classList.add('health-critical'); }
+
+        if (health <= 0) showBSOD();
+    }
+
+    function startHealthDrain() {
+        setInterval(() => { if (health > 0) { health -= 0.13; updateHealthUI(); } }, 980);
+    }
+
+    function showBSOD() {
+        document.getElementById('bsod').classList.remove('hidden');
+        document.getElementById('bsod').classList.add('flex');
+    }
+
+    function restartGame() {
+        document.getElementById('bsod').classList.add('hidden');
+        health = 100;
+        updateHealthUI();
+        document.getElementById('windows-container').innerHTML = '';
+        windowCounter = 0;
+    }
+
+    function createNotification(type) {
+        const notif = document.createElement('div');
+        notif.className = `toast bg-zinc-900 border border-white/10 rounded-3xl shadow-2xl p-5 w-80 flex gap-4`;
+        const titles = { update:"Update ready", scan:"Threats detected", defrag:"Drive fragmented", cleanup:"Temp files", chkdsk:"Disk errors", sfc:"Corrupt files", drivers:"Drivers outdated", startup:"Slow boot" };
+        notif.innerHTML = `
+            <div class="flex-1"><i class="fa-solid ${taskConfig[type].icon} text-${taskConfig[type].color}-400"></i><span class="font-semibold ml-2">${titles[type]}</span></div>
+            <button onclick="handleNotification('${type}', this)" class="bg-white text-black text-xs px-5 py-2 rounded-2xl">FIX NOW</button>
+        `;
+        document.getElementById('notifications').appendChild(notif);
+        setTimeout(() => {
+            if (notif.parentNode) {
+                notif.style.transition = 'all 0.35s';
+                notif.style.transform = 'translateX(140px)';
+                notif.style.opacity = '0';
+                setTimeout(() => notif.remove(), 350);
+                health = Math.max(0, health - 11);
+                updateHealthUI();
+            }
+        }, 10500);
+    }
+
+    function handleNotification(type, btn) {
+        btn.closest('.toast').remove();
+        openApp(type);
+    }
+
+    function startNotifications() {
+        const types = Object.keys(taskConfig);
+        function spawn() {
+            createNotification(types[Math.floor(Math.random() * types.length)]);
+            setTimeout(spawn, Math.random() * 15000 + 7000);
+        }
+        spawn();
+    }
+
+    function updateClock() {
+        setInterval(() => {
+            const n = new Date();
+            document.getElementById('clock').textContent = `${n.getHours()}:${n.getMinutes().toString().padStart(2,'0')}`;
+            const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+            document.getElementById('date').textContent = `${months[n.getMonth()]} ${n.getDate()}`;
+        }, 1000);
+    }
+
+    function toggleStartMenu() { document.getElementById('start-menu').classList.toggle('hidden'); }
+    function fakeSearch() { alert("🔍 Only maintenance tools work here!"); }
+    function toggleCalendar() { alert("📅 March 12, 2026\n\nAll tools are now ultra-realistic with advanced animations!"); }
+
+    function initGame() {
+        updateClock();
+        startHealthDrain();
+        startNotifications();
+        updateHealthUI();
+        setTimeout(() => openApp('scan'), 1200);
+        
+        // Welcome toast
+        setTimeout(() => {
+            const w = document.createElement('div');
+            w.className = 'toast bg-emerald-900/90 border border-emerald-400 rounded-3xl p-5 w-80 text-center';
+            w.innerHTML = `<div class="text-emerald-300 font-bold text-lg">Win11 Caretaker v7</div><div class="text-sm mt-2">Fully rewritten with advanced CSS animations!<br>Enjoy the smoothest maintenance experience ever.</div><button onclick="this.parentElement.remove()" class="mt-4 text-xs bg-white/20 px-6 py-2 rounded-2xl">Let's go!</button>`;
+            document.getElementById('notifications').appendChild(w);
+        }, 2200);
+    }
+
+    window.onload = initGame;
+</script>
+</body>
+</html>
