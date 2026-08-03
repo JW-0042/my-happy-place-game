@@ -29,6 +29,7 @@ import {
   APP_KEYS,
   BIOS_BSOD_CHANCE,
   BROWSER_HOME,
+  DOCK_KEYS,
   COLOR_STYLES,
   CREATOR_X_HANDLE,
   CREATOR_X_URL,
@@ -154,6 +155,34 @@ function healthTone(health: number) {
   if (health > 75) return { label: "OPTIMAL", color: "text-emerald-400", bar: "from-emerald-400 to-cyan-400" };
   if (health > 40) return { label: "NEEDS ATTENTION", color: "text-amber-400", bar: "from-amber-400 to-orange-400" };
   return { label: "CRITICAL", color: "text-red-400", bar: "from-red-500 to-rose-400" };
+}
+
+/** Desktop icon / taskbar urgency: red = toast, amber = open needs action, green = idle OK. */
+function toolVisualStatus(
+  key: AppKey,
+  toasts: Toast[],
+  windows: WindowState[],
+): "ok" | "attention" | "urgent" {
+  const toastPending = toasts.some(
+    (t) => t.kind === "task" && t.appKey === key && !t.leaving,
+  );
+  if (toastPending) return "urgent";
+  const win = windows.find((w) => w.appKey === key && !w.closing);
+  if (win) {
+    if (win.running) return "attention";
+    if (win.needsUpdateFirst) return "attention";
+    if (win.appKey === "update" && (win.updateUi === "needs-check" || win.updateUi === "ready")) {
+      return "attention";
+    }
+    if (win.appKey === "update" && win.updateUi === "up-to-date") return "ok";
+  }
+  return "ok";
+}
+
+function statusRingClass(status: "ok" | "attention" | "urgent") {
+  if (status === "urgent") return "icon-status-urgent";
+  if (status === "attention") return "icon-status-attention";
+  return "icon-status-ok";
 }
 
 function useClock() {
@@ -332,6 +361,7 @@ export function CaretakerGame() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [batteryOpen, setBatteryOpen] = useState(false);
+  const [healthExpanded, setHealthExpanded] = useState(false);
   const [booted, setBooted] = useState(false);
   const [bootScreen, setBootScreen] = useState(true);
   const isMobile = useIsNarrow(640);
@@ -1038,11 +1068,65 @@ export function CaretakerGame() {
     }, 2200);
   };
 
+
+  // Desktop keyboard: Esc closes menus/window, Enter starts focused tool
+  useEffect(() => {
+    if (bsod || bootScreen || !booted) return;
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement | null)?.isContentEditable) {
+        return;
+      }
+      if (e.key === "Escape") {
+        if (startOpen || searchOpen || calendarOpen || batteryOpen) {
+          setStartOpen(false);
+          setSearchOpen(false);
+          setCalendarOpen(false);
+          setBatteryOpen(false);
+          e.preventDefault();
+          return;
+        }
+        const open = windowsRef.current.filter((w) => !w.closing);
+        if (open.length === 0) return;
+        const top = open.reduce((a, b) => (a.z >= b.z ? a : b));
+        // Esc = Close (no cancel penalty)
+        closeWindow(top.id, false);
+        e.preventDefault();
+        return;
+      }
+      if (e.key === "Enter" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const open = windowsRef.current.filter((w) => !w.closing);
+        if (open.length === 0) return;
+        const top = open.reduce((a, b) => (a.z >= b.z ? a : b));
+        if (!top.running && top.appKey !== "support" && top.appKey !== "browser") {
+          startTask(top.id, top.appKey);
+          e.preventDefault();
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [
+    batteryOpen,
+    bootScreen,
+    booted,
+    bsod,
+    calendarOpen,
+    closeWindow,
+    searchOpen,
+    startOpen,
+    startTask,
+  ]);
+
   const tone = healthTone(health);
   const effectiveDrain = DRAIN_BY_LEVEL[drainLevel] + drainBoost;
   const drainChevrons = effectiveDrain >= 0.32 ? 3 : effectiveDrain >= 0.16 ? 2 : 1;
   const drainColor =
     effectiveDrain >= 0.32 ? "text-red-400" : effectiveDrain >= 0.16 ? "text-amber-400" : "text-emerald-400";
+  const taskbarKeys: AppKey[] = isMobile ? DOCK_KEYS : APP_KEYS;
+  const desktopIconKeys: AppKey[] = isMobile
+    ? APP_KEYS.filter((k) => !DOCK_KEYS.includes(k))
+    : APP_KEYS;
 
   return (
     <div
@@ -1056,6 +1140,7 @@ export function CaretakerGame() {
         setSearchOpen(false);
         setCalendarOpen(false);
         setBatteryOpen(false);
+        setHealthExpanded(false);
       }}
     >
       {bootScreen && (
@@ -1079,10 +1164,16 @@ export function CaretakerGame() {
         </div>
       )}
 
-      {/* Mobile: compact full-width health bar */}
-      <div
-        className={`absolute left-2 right-2 top-2 z-[45] rounded-2xl border border-white/10 bg-black/70 px-3 py-2 shadow-xl backdrop-blur-xl sm:hidden ${health <= 40 ? "health-critical" : ""}`}
-        onClick={(e) => e.stopPropagation()}
+      {/* Mobile: always-visible health — tap to expand details */}
+      <button
+        type="button"
+        className={`absolute left-2 right-2 top-2 z-[45] rounded-xl border border-white/10 bg-black/75 px-3 py-2 text-left shadow-xl backdrop-blur-xl sm:hidden ${health <= 40 ? "health-critical" : ""}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          setHealthExpanded((v) => !v);
+        }}
+        aria-expanded={healthExpanded}
+        aria-label="System health details"
       >
         <div className="flex items-center gap-2">
           <span className="text-base text-red-400" aria-hidden>♥</span>
@@ -1090,10 +1181,6 @@ export function CaretakerGame() {
             <div className="flex items-center justify-between gap-2">
               <span className="text-[10px] font-semibold tracking-wider text-white/80">HEALTH</span>
               <div className="flex items-center gap-2">
-                <span className={`flex items-center gap-1 font-mono text-[10px] ${drainColor}`}>
-                  <span className="tracking-tighter">{"<".repeat(drainChevrons)}</span>
-                  {effectiveDrain.toFixed(2)}
-                </span>
                 {supportActive && (
                   <span className="rounded bg-cyan-500/20 px-1.5 py-0.5 text-[9px] font-semibold text-cyan-300">
                     PAUSED
@@ -1107,7 +1194,25 @@ export function CaretakerGame() {
             </div>
           </div>
         </div>
-      </div>
+        {healthExpanded && (
+          <div className="health-expand mt-2 border-t border-white/10 pt-2" onClick={(e) => e.stopPropagation()}>
+            <div className={`flex items-center justify-between font-mono text-[11px] ${drainColor}`}>
+              <span className="text-white/50">Drain speed</span>
+              <span className="flex items-center gap-1">
+                <span className="tracking-tighter">{"<".repeat(drainChevrons)}</span>
+                {effectiveDrain.toFixed(2)}/s
+              </span>
+            </div>
+            <p className={`mt-1 text-[10px] font-medium ${tone.color}`}>{tone.label}</p>
+            <p className={`mt-0.5 text-[10px] ${definitionsReady ? "text-emerald-400/80" : "text-amber-400/80"}`}>
+              {definitionsReady ? "Security defs: current" : "Security defs: outdated"}
+            </p>
+            {supportActive && (
+              <p className="mt-1 text-[10px] font-semibold text-cyan-300">Remote support · decay paused</p>
+            )}
+          </div>
+        )}
+      </button>
 
       {/* Desktop icons — mobile: 3-col scroll under health; desktop: classic grid */}
       <div
@@ -1124,10 +1229,11 @@ export function CaretakerGame() {
               : "grid grid-cols-2 gap-x-6 gap-y-5 sm:gap-x-14 sm:gap-y-10"
           }
         >
-          {APP_KEYS.map((key) => {
+          {desktopIconKeys.map((key) => {
             const cfg = TASKS[key];
             const Icon = cfg.icon;
             const styles = COLOR_STYLES[cfg.color];
+            const status = toolVisualStatus(key, toasts, windows);
             return (
               <button
                 key={key}
@@ -1136,12 +1242,12 @@ export function CaretakerGame() {
                   e.stopPropagation();
                   openApp(key);
                 }}
-                className={`group flex flex-col items-center text-center transition-transform active:scale-95 ${
+                className={`group flex flex-col items-center text-center transition-transform active:scale-95 focus-visible:outline-none ${
                   isMobile ? "min-h-16 w-full px-1 py-1" : "w-16 hover:scale-110 sm:w-20"
                 }`}
               >
                 <div
-                  className={`flex items-center justify-center rounded-2xl bg-gradient-to-br shadow-inner ${styles.badgeBg} ${
+                  className={`flex items-center justify-center rounded-xl bg-gradient-to-br shadow-inner ${styles.badgeBg} ${statusRingClass(status)} ${
                     isMobile ? "h-12 w-12" : "h-12 w-12 sm:h-14 sm:w-14"
                   }`}
                 >
@@ -1156,10 +1262,15 @@ export function CaretakerGame() {
         </div>
       </div>
 
-      {/* Desktop health card (sm+) */}
-      <div
-        className={`absolute right-3 top-3 hidden w-56 rounded-3xl border border-white/10 bg-black/40 p-4 shadow-2xl backdrop-blur-2xl sm:right-8 sm:top-8 sm:block sm:w-72 sm:p-5 ${health <= 40 ? "health-critical" : ""}`}
-        onClick={(e) => e.stopPropagation()}
+      {/* Desktop health card (sm+) — click expands details */}
+      <button
+        type="button"
+        className={`absolute right-3 top-3 z-[45] hidden w-56 rounded-xl border border-white/10 bg-black/55 p-4 text-left shadow-2xl backdrop-blur-2xl sm:right-8 sm:top-8 sm:block sm:w-72 sm:p-5 ${health <= 40 ? "health-critical" : ""}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          setHealthExpanded((v) => !v);
+        }}
+        aria-expanded={healthExpanded}
       >
         <div className="mb-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 sm:gap-3">
@@ -1182,21 +1293,28 @@ export function CaretakerGame() {
               </span>
               <span className="text-[9px] opacity-50">/s</span>
             </div>
-            {supportActive && (
-              <div className="mt-1 text-right text-[10px] font-semibold text-cyan-300">
-                Remote support · decay paused
-              </div>
-            )}
           </div>
         </div>
-        <div className="h-2.5 overflow-hidden rounded-3xl bg-white/10 sm:h-3">
-          <div className={`h-full rounded-3xl bg-gradient-to-r transition-[width] duration-300 ${tone.bar}`} style={{ width: `${health}%` }} />
+        <div className="h-2.5 overflow-hidden rounded-full bg-white/10 sm:h-3">
+          <div className={`h-full rounded-full bg-gradient-to-r transition-[width] duration-300 ${tone.bar}`} style={{ width: `${health}%` }} />
         </div>
-        <p className={`mt-2 text-center text-[10px] font-medium sm:text-xs ${tone.color}`}>{tone.label}</p>
-        <p className={`mt-1 text-center text-[9px] sm:text-[10px] ${definitionsReady ? "text-emerald-400/80" : "text-amber-400/80"}`}>
-          {definitionsReady ? "Security defs: current" : "Security defs: outdated"}
-        </p>
-      </div>
+        {healthExpanded ? (
+          <div className="mt-3 space-y-1 border-t border-white/10 pt-2">
+            <p className={`text-center text-[10px] font-medium sm:text-xs ${tone.color}`}>{tone.label}</p>
+            <p className={`text-center text-[9px] sm:text-[10px] ${definitionsReady ? "text-emerald-400/80" : "text-amber-400/80"}`}>
+              {definitionsReady ? "Security defs: current" : "Security defs: outdated"}
+            </p>
+            {supportActive && (
+              <p className="text-center text-[10px] font-semibold text-cyan-300">
+                Remote support · decay paused
+              </p>
+            )}
+            <p className="text-center text-[9px] text-white/35">Click to collapse</p>
+          </div>
+        ) : (
+          <p className="mt-2 text-center text-[9px] text-white/35">Click for details</p>
+        )}
+      </button>
 
       <div className="pointer-events-none absolute inset-0 z-30 pb-14 pt-1">
         {(isMobile
@@ -1281,18 +1399,22 @@ export function CaretakerGame() {
               setCalendarOpen(false);
               setBatteryOpen(false);
             }}
-            className="hidden h-9 w-48 items-center rounded-3xl bg-white/10 px-4 text-sm transition-all hover:bg-white/20 sm:flex sm:w-72 lg:w-80"
+            className="hidden h-9 w-48 items-center rounded-xl bg-white/10 px-4 text-sm transition-all hover:bg-white/20 sm:flex sm:w-72 lg:w-80"
           >
             <Search className="mr-3 h-4 w-4 shrink-0 opacity-70" />
             <span className="truncate text-white/70">Search maintenance tools…</span>
           </button>
         </div>
-        <div className="taskbar-apps flex min-w-0 flex-1 items-center justify-start gap-0.5 overflow-x-auto px-0.5 sm:justify-center sm:gap-1 sm:px-1">
-          {APP_KEYS.map((key) => {
+        <div className="taskbar-apps flex min-w-0 flex-1 items-center justify-center gap-0.5 overflow-x-auto px-0.5 sm:gap-1 sm:px-1">
+          {taskbarKeys.map((key) => {
             const cfg = TASKS[key];
             const Icon = cfg.icon;
             const open = windows.some((w) => w.appKey === key && !w.closing);
             const running = windows.some((w) => w.appKey === key && w.running && !w.closing);
+            const needsFix = toasts.some(
+              (t) => t.kind === "task" && t.appKey === key && !t.leaving,
+            );
+            const status = toolVisualStatus(key, toasts, windows);
             return (
               <button
                 key={key}
@@ -1300,11 +1422,21 @@ export function CaretakerGame() {
                 title={cfg.name}
                 aria-label={cfg.name}
                 onClick={() => openApp(key)}
-                className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition-all hover:bg-white/10 active:scale-95 sm:h-9 sm:w-9 ${open ? "bg-white/15 ring-1 ring-white/20" : ""}`}
+                className={`group/tb relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-all hover:bg-white/10 active:scale-95 sm:h-9 sm:w-9 ${open ? "bg-white/15 ring-1 ring-white/20" : ""}`}
               >
+                <span className="taskbar-tip hidden sm:block">{cfg.name}</span>
                 <Icon className="h-5 w-5 sm:h-4 sm:w-4" />
+                {/* Running indicator */}
                 {running && (
                   <span className="absolute bottom-1 left-1/2 h-0.5 w-4 -translate-x-1/2 rounded-full bg-sky-400 sm:bottom-0.5" />
+                )}
+                {/* Badge: fix available / attention */}
+                {(needsFix || status === "attention") && !running && (
+                  <span
+                    className={`absolute right-1 top-1 h-2 w-2 rounded-full sm:right-0.5 sm:top-0.5 ${
+                      needsFix ? "bg-red-400" : "bg-amber-400"
+                    }`}
+                  />
                 )}
               </button>
             );
@@ -1412,7 +1544,7 @@ export function CaretakerGame() {
       )}
 
       {startOpen && (
-        <div className="fixed bottom-[4.25rem] left-2 right-2 z-[70] max-h-[min(70dvh,520px)] overflow-hidden overflow-y-auto rounded-3xl border border-white/10 bg-zinc-900/98 shadow-2xl backdrop-blur-3xl sm:bottom-16 sm:left-4 sm:right-auto sm:w-[min(100vw-1rem,460px)]" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed bottom-[4.25rem] left-2 right-2 z-[70] max-h-[min(70dvh,520px)] overflow-hidden overflow-y-auto rounded-xl border border-white/10 bg-zinc-900/98 shadow-2xl backdrop-blur-3xl sm:bottom-16 sm:left-4 sm:right-auto sm:w-[min(100vw-1rem,460px)]" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center gap-4 border-b border-white/10 bg-zinc-950/60 px-5 py-4 sm:px-6 sm:py-5">
             <WindoorsLogo className="h-10 w-10 shrink-0 sm:h-12 sm:w-12" uid={`${logoUid}-start`} />
             <div className="min-w-0">
@@ -1440,7 +1572,7 @@ export function CaretakerGame() {
       )}
 
       {searchOpen && (
-        <div className="fixed bottom-16 left-2 z-50 w-[min(100vw-1rem,360px)] rounded-3xl border border-white/10 bg-zinc-900/95 p-4 shadow-2xl backdrop-blur-3xl sm:left-16" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed bottom-16 left-2 z-50 w-[min(100vw-1rem,360px)] rounded-xl border border-white/10 bg-zinc-900/95 p-4 shadow-2xl backdrop-blur-3xl sm:left-16" onClick={(e) => e.stopPropagation()}>
           <p className="mb-3 text-sm text-white/70">Only maintenance tools work here.</p>
           <div className="space-y-1">
             {APP_KEYS.map((key) => {
@@ -1458,71 +1590,22 @@ export function CaretakerGame() {
       )}
 
       {calendarOpen && (
-        <div className="fixed bottom-16 right-2 z-50 w-64 rounded-3xl border border-white/10 bg-zinc-900/95 p-5 shadow-2xl backdrop-blur-3xl sm:right-6" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed bottom-16 right-2 z-50 w-64 rounded-xl border border-white/10 bg-zinc-900/95 p-5 shadow-2xl backdrop-blur-3xl sm:right-6" onClick={(e) => e.stopPropagation()}>
           <p className="text-lg font-semibold">{clock.date}, 2026</p>
           <p className="mt-2 text-sm text-white/70">{PRODUCT_NAME} {VERSION} — August updates use the 08-2026 catalog prefix.</p>
         </div>
       )}
 
-      <div className="fixed bottom-[4.75rem] left-2 right-2 z-[80] flex flex-col gap-2 sm:bottom-20 sm:left-auto sm:right-6 sm:max-w-[calc(100vw-1.5rem)] sm:gap-3">
+      <div
+        className="toast-stack pointer-events-none fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] left-2 right-2 z-[80] flex flex-col-reverse gap-2 sm:bottom-16 sm:left-auto sm:right-6 sm:w-80 sm:max-w-[calc(100vw-1.5rem)] sm:gap-2.5"
+      >
         {toasts.map((toast) => (
-          <div
+          <ToastCard
             key={toast.id}
-            className={`toast-enter flex w-full gap-3 rounded-2xl border border-white/10 bg-zinc-900/98 p-3.5 shadow-2xl backdrop-blur-xl transition-all sm:w-80 sm:max-w-full sm:rounded-3xl sm:p-5 ${toast.leaving ? "translate-x-8 opacity-0 sm:translate-x-20" : ""} ${toast.kind === "welcome" || toast.kind === "success" ? "border-emerald-400/50 bg-emerald-950/95" : ""}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {toast.kind === "task" && toast.appKey ? (
-              <>
-                <div className="min-w-0 flex-1">
-                  {(() => {
-                    const cfg = TASKS[toast.appKey!];
-                    const Icon = cfg.icon;
-                    return (
-                      <div className="flex items-center gap-2">
-                        <Icon className={`h-4 w-4 shrink-0 ${COLOR_STYLES[cfg.color].icon}`} />
-                        <span className="truncate font-semibold">{toast.title}</span>
-                      </div>
-                    );
-                  })()}
-                  <p className="mt-1 text-xs text-white/50">{PRODUCT_NAME} needs attention</p>
-                </div>
-                <button type="button" onClick={() => dismissToast(toast.id, toast.appKey)} className="shrink-0 rounded-2xl bg-white px-4 py-2.5 text-xs font-semibold text-black active:scale-95 sm:py-2">
-                  FIX NOW
-                </button>
-              </>
-            ) : toast.kind === "success" && toast.appKey ? (
-              <>
-                <div className="min-w-0 flex-1">
-                  {(() => {
-                    const cfg = TASKS[toast.appKey!];
-                    const Icon = cfg.icon;
-                    return (
-                      <div className="flex items-center gap-2">
-                        <Icon className={`h-4 w-4 shrink-0 ${COLOR_STYLES[cfg.color].icon}`} />
-                        <span className="truncate font-semibold text-emerald-300">{toast.title}</span>
-                      </div>
-                    );
-                  })()}
-                  <p className="mt-1 text-xs text-white/55">{toast.body || "Task finished successfully"}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => dismissToast(toast.id, toast.appKey)}
-                  className="shrink-0 rounded-2xl bg-emerald-400 px-4 py-2.5 text-xs font-semibold text-black active:scale-95 sm:py-2"
-                >
-                  OPEN
-                </button>
-              </>
-            ) : (
-              <div className="w-full text-center">
-                <div className="text-lg font-bold text-emerald-300">{toast.title}</div>
-                {toast.body && <div className="mt-2 text-sm text-white/80">{toast.body}</div>}
-                <button type="button" onClick={() => dismissToast(toast.id)} className="mt-3 rounded-2xl bg-white/20 px-6 py-2 text-xs">
-                  Let's go!
-                </button>
-              </div>
-            )}
-          </div>
+            toast={toast}
+            onDismiss={() => dismissToast(toast.id)}
+            onFix={() => dismissToast(toast.id, toast.appKey)}
+          />
         ))}
       </div>
 
@@ -1587,6 +1670,120 @@ export function CaretakerGame() {
     </div>
   );
 }
+
+
+function ToastCard({
+  toast,
+  onDismiss,
+  onFix,
+}: {
+  toast: Toast;
+  onDismiss: () => void;
+  onFix: () => void;
+}) {
+  const touch = useRef<{ x: number; y: number } | null>(null);
+  const dxRef = useRef(0);
+  const [dx, setDx] = useState(0);
+  const [swiping, setSwiping] = useState(false);
+
+  const finishSwipe = () => {
+    setSwiping(false);
+    const delta = dxRef.current;
+    if (Math.abs(delta) > 96) {
+      onDismiss();
+    }
+    dxRef.current = 0;
+    setDx(0);
+  };
+
+  return (
+    <div
+      className={`toast-enter toast-card pointer-events-auto flex w-full gap-3 rounded-xl border border-white/10 bg-[#161618]/96 p-3.5 shadow-2xl backdrop-blur-xl transition-all sm:p-4 ${
+        toast.leaving ? "translate-x-8 opacity-0 sm:translate-x-16" : ""
+      } ${toast.kind === "welcome" || toast.kind === "success" ? "border-emerald-400/45 bg-emerald-950/95" : ""} ${
+        swiping ? "swiping" : ""
+      }`}
+      style={{ transform: dx ? `translateX(${dx}px)` : undefined, opacity: dx ? Math.max(0.35, 1 - Math.abs(dx) / 180) : undefined }}
+      onClick={(e) => e.stopPropagation()}
+      onTouchStart={(e) => {
+        const t = e.touches[0];
+        if (!t) return;
+        touch.current = { x: t.clientX, y: t.clientY };
+        setSwiping(true);
+      }}
+      onTouchMove={(e) => {
+        if (!touch.current) return;
+        const t = e.touches[0];
+        if (!t) return;
+        const adx = t.clientX - touch.current.x;
+        const ady = t.clientY - touch.current.y;
+        if (Math.abs(adx) > Math.abs(ady)) {
+          dxRef.current = adx;
+          setDx(adx);
+        }
+      }}
+      onTouchEnd={() => finishSwipe()}
+      onTouchCancel={() => finishSwipe()}
+    >
+      {toast.kind === "task" && toast.appKey ? (
+        <>
+          <div className="min-w-0 flex-1">
+            {(() => {
+              const cfg = TASKS[toast.appKey!];
+              const Icon = cfg.icon;
+              return (
+                <div className="flex items-center gap-2">
+                  <Icon className={`h-4 w-4 shrink-0 ${COLOR_STYLES[cfg.color].icon}`} />
+                  <span className="truncate font-semibold">{toast.title}</span>
+                </div>
+              );
+            })()}
+            <p className="mt-1 text-xs text-white/50">{PRODUCT_NAME} needs attention</p>
+          </div>
+          <button
+            type="button"
+            onClick={onFix}
+            className="shrink-0 rounded-xl bg-white px-4 py-2.5 text-xs font-semibold text-black active:scale-95 sm:py-2"
+          >
+            FIX NOW
+          </button>
+        </>
+      ) : toast.kind === "success" && toast.appKey ? (
+        <>
+          <div className="min-w-0 flex-1">
+            {(() => {
+              const cfg = TASKS[toast.appKey!];
+              const Icon = cfg.icon;
+              return (
+                <div className="flex items-center gap-2">
+                  <Icon className={`h-4 w-4 shrink-0 ${COLOR_STYLES[cfg.color].icon}`} />
+                  <span className="truncate font-semibold text-emerald-300">{toast.title}</span>
+                </div>
+              );
+            })()}
+            <p className="mt-1 text-xs text-white/55">{toast.body || "Task finished successfully"}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onFix}
+            className="shrink-0 rounded-xl bg-emerald-400 px-4 py-2.5 text-xs font-semibold text-black active:scale-95 sm:py-2"
+          >
+            OPEN
+          </button>
+        </>
+      ) : (
+        <div className="w-full text-center">
+          <div className="text-lg font-bold text-emerald-300">{toast.title}</div>
+          {toast.body && <div className="mt-2 text-sm text-white/80">{toast.body}</div>}
+          <button type="button" onClick={onDismiss} className="mt-3 rounded-xl bg-white/20 px-6 py-2 text-xs">
+            Let's go!
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 function AppWindow({
   win,
@@ -1733,12 +1930,12 @@ function AppWindow({
             </div>
           </div>
         </div>
-        <button type="button" onClick={onOpenUpdate} className="mb-3 flex w-full items-center justify-center gap-2 rounded-3xl bg-gradient-to-r from-blue-600 to-blue-500 py-4 text-base font-semibold text-white shadow-lg transition-transform active:scale-[0.98] sm:py-5 sm:text-lg">
+        <button type="button" onClick={onOpenUpdate} className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 py-4 text-base font-semibold text-white shadow-lg transition-transform active:scale-[0.98] sm:py-5 sm:text-lg">
           <Download className="h-5 w-5" />
-          OPEN {PRODUCT_NAME.toUpperCase()} UPDATE
+          Open {PRODUCT_NAME} Update
         </button>
-        <button type="button" onClick={onStart} className="w-full rounded-3xl border border-white/15 bg-white/5 py-3 text-sm font-medium text-white/70 transition hover:bg-white/10">
-          Try scan again (after Update)
+        <button type="button" onClick={onStart} className="w-full rounded-xl border border-white/15 bg-white/5 py-3 text-sm font-medium text-white/70 transition hover:bg-white/10">
+          Start
         </button>
       </>
     );
@@ -1811,7 +2008,7 @@ function AppWindow({
             type="button"
             onClick={onCallSupport}
             disabled={supportActive}
-            className={`flex-1 rounded-3xl py-4 text-sm font-semibold text-white shadow-lg transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 sm:text-base ${styles.button}`}
+            className={`flex-1 rounded-xl py-4 text-sm font-semibold text-white shadow-lg transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 sm:text-base ${styles.button}`}
           >
             {supportActive ? "On call…" : "Call support"}
           </button>
@@ -1819,7 +2016,7 @@ function AppWindow({
             type="button"
             onClick={onFinishSupport}
             disabled={!supportActive}
-            className="flex-1 rounded-3xl border border-white/20 bg-white/10 py-4 text-sm font-semibold text-white transition hover:bg-white/15 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 sm:text-base"
+            className="flex-1 rounded-xl border border-white/20 bg-white/10 py-4 text-sm font-semibold text-white transition hover:bg-white/15 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 sm:text-base"
           >
             Finish support
           </button>
@@ -1860,9 +2057,9 @@ function AppWindow({
           <button
             type="button"
             onClick={onStart}
-            className={`w-full rounded-3xl py-4 text-base font-semibold text-white shadow-lg transition-transform active:scale-[0.98] sm:py-5 sm:text-lg ${styles.button}`}
+            className={`w-full rounded-xl py-4 text-base font-semibold text-white shadow-lg transition-transform active:scale-[0.98] sm:py-5 sm:text-lg ${styles.button}`}
           >
-            FLASH FIRMWARE
+            Start
           </button>
         )}
         {(win.running || win.progress > 0) && !win.complete && (
@@ -1916,8 +2113,8 @@ function AppWindow({
           </div>
         )}
         {!win.running && (
-          <button type="button" onClick={onStart} className={`w-full rounded-3xl py-4 text-base font-semibold text-white shadow-lg transition-transform active:scale-[0.98] sm:py-5 sm:text-lg ${styles.button}`}>
-            START {cfg.name.toUpperCase()}
+          <button type="button" onClick={onStart} className={`w-full rounded-xl py-4 text-base font-semibold text-white shadow-lg transition-transform active:scale-[0.98] sm:py-5 sm:text-lg ${styles.button}`}>
+            Start
           </button>
         )}
         {(win.running || win.progress > 0) && !win.complete && (
@@ -1934,10 +2131,10 @@ function AppWindow({
 
   return (
     <div
-      className={`window-shell pointer-events-auto absolute flex flex-col overflow-hidden border border-zinc-700 bg-zinc-900 ${win.closing ? "closing" : ""} ${
+      className={`window-shell pointer-events-auto absolute flex flex-col overflow-hidden border border-white/10 ${win.closing ? "closing" : ""} ${
         isMobileLayout
-          ? "inset-x-0 top-[4.5rem] bottom-14 !w-auto rounded-t-2xl border-x-0 border-b-0 sm:inset-x-2 sm:top-14 sm:bottom-16 sm:rounded-2xl sm:border"
-          : "rounded-3xl"
+          ? "inset-x-0 top-[4.5rem] bottom-14 !w-auto rounded-t-xl border-x-0 border-b-0 sm:inset-x-2 sm:top-14 sm:bottom-16 sm:rounded-xl sm:border"
+          : "rounded-xl"
       }`}
       style={
         isMobileLayout
@@ -1953,7 +2150,7 @@ function AppWindow({
       onMouseDown={onFocus}
     >
       <div
-        className="titlebar-grad flex h-12 shrink-0 items-center px-3 sm:h-11 sm:cursor-move sm:px-4"
+        className="titlebar-grad flex h-11 shrink-0 items-center border-b border-white/5 px-3 sm:h-10 sm:cursor-move sm:px-3"
         onMouseDown={isMobileLayout ? undefined : onTitleDown}
       >
         <Icon className={`mr-2 h-4 w-4 shrink-0 sm:mr-3 ${styles.icon}`} />
@@ -2073,7 +2270,7 @@ function UpdatePanel({
         <button
           type="button"
           onClick={onCheck}
-          className="flex w-full items-center justify-center gap-2 rounded-3xl border border-white/15 bg-white/5 py-4 text-sm font-semibold text-white transition hover:bg-white/10"
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 py-4 text-sm font-semibold text-white transition hover:bg-white/10"
         >
           <RefreshCw className="h-4 w-4" />
           Check for updates
@@ -2159,19 +2356,19 @@ function UpdatePanel({
               type="button"
               onClick={onCheck}
               disabled={checking}
-              className="flex w-full items-center justify-center gap-2 rounded-3xl border border-white/15 bg-white/5 py-3.5 text-sm font-semibold text-white transition hover:bg-white/10 disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 py-3.5 text-sm font-semibold text-white transition hover:bg-white/10 disabled:opacity-60"
             >
               <RefreshCw className={`h-4 w-4 ${checking ? "animate-spin" : ""}`} />
-              {checking ? "Checking…" : needsCheck ? "Check for updates" : "Check again"}
+              {checking ? "Checking…" : "Check for updates"}
             </button>
           )}
           {ready && (
-            <button type="button" onClick={onStart} className={`w-full rounded-3xl py-4 text-base font-semibold text-white shadow-lg transition-transform active:scale-[0.98] sm:py-5 sm:text-lg ${styles.button}`}>
-              Download & install ({win.updatePackages.length})
+            <button type="button" onClick={onStart} className={`w-full rounded-xl py-4 text-base font-semibold text-white shadow-lg transition-transform active:scale-[0.98] sm:py-5 sm:text-lg ${styles.button}`}>
+              Start
             </button>
           )}
           {needsCheck && (
-            <button type="button" onClick={onStart} className="w-full rounded-3xl border border-white/10 py-2.5 text-xs text-white/40">
+            <button type="button" onClick={onStart} className="w-full rounded-xl border border-white/10 py-2.5 text-xs text-white/40">
               Install without check (blocked)
             </button>
           )}

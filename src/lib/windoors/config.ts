@@ -256,6 +256,9 @@ export const TASKS: Record<AppKey, TaskConfig> = {
 
 export const APP_KEYS = Object.keys(TASKS) as AppKey[];
 
+/** Primary mobile dock tools — rest live in Start / desktop. */
+export const DOCK_KEYS: AppKey[] = ["update", "scan", "cleanup", "support", "browser"];
+
 /**
  * Passive health drain per ~1s tick.
  * Level 3 = aggressive thermal/timer drift, 1 = stabilized after firmware work.
@@ -280,7 +283,7 @@ export const VERSION_BASE = "11.3";
  * **Bump +1 on every shippable change** from now on.
  * Displayed as: 11.3.XXXXX
  */
-export const BUILD = 4;
+export const BUILD = 6;
 
 /** Full version string: 11.3.00001, 11.3.00002, … */
 export const VERSION = `${VERSION_BASE}.${String(BUILD).padStart(5, "0")}`;
