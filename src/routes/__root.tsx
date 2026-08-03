@@ -13,7 +13,14 @@ export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      {
+        name: "viewport",
+        content:
+          "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no",
+      },
+      { name: "mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "theme-color", content: "#0b1220" },
       {
         title: APP_NAME,
       },
@@ -36,7 +43,7 @@ export const Route = createRootRoute({
       <head>
         <HeadContent />
       </head>
-      <body className="overflow-hidden">
+      <body className="overflow-hidden overscroll-none">
         <CreatedWithGrokBanner />
         <AuthProvider>
           <Outlet />

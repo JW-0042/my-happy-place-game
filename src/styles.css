@@ -251,3 +251,30 @@
     opacity: 0.85;
   }
 }
+
+
+/* mobile shell */
+.mobile-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+.taskbar-blur {
+  padding-bottom: max(0px, env(safe-area-inset-bottom, 0px));
+  min-height: 3.5rem;
+}
+@media (max-width: 639px) {
+  .window-shell {
+    animation-duration: 280ms;
+  }
+  .desktop-icon-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  .taskbar-apps {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .taskbar-apps::-webkit-scrollbar {
+    display: none;
+  }
+}
