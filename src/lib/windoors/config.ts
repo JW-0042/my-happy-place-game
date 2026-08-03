@@ -249,10 +249,24 @@ export const DRAIN_BY_LEVEL: Record<1 | 2 | 3, number> = {
 /** Extra drain added per Remote Support call (stacks). */
 export const SUPPORT_DRAIN_BUMP = 0.035;
 
-/** 11.3 — funny nod to Windows 3.11 */
-export const VERSION = "11.3";
+/**
+ * Marketing / product line — NEVER change (Windows 3.11 gag stays forever).
+ * Only BUILD increments.
+ */
+export const VERSION_BASE = "11.3";
+
+/**
+ * Monotonic build counter (5-digit display).
+ * **Bump +1 on every shippable change** from now on.
+ * Displayed as: 11.3.XXXXX
+ */
+export const BUILD = 1;
+
+/** Full version string: 11.3.00001, 11.3.00002, … */
+export const VERSION = `${VERSION_BASE}.${String(BUILD).padStart(5, "0")}`;
+
 export const PRODUCT_NAME = "Windoors";
-export const FULL_TITLE = `Windoors ${VERSION} Caretaker`;
+export const FULL_TITLE = `Windoors ${VERSION_BASE} Caretaker`;
 
 /** Chance BIOS flash ends in unrecoverable stop (BSOD). */
 export const BIOS_BSOD_CHANCE = 0.32;

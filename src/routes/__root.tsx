@@ -1,9 +1,10 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth/provider";
 import { CreatedWithGrokBanner } from "@/components/created-with-grok-banner";
+import { FULL_TITLE, VERSION_BASE } from "@/lib/windoors/config";
 import appCss from "../styles.css?url";
 
-const APP_NAME = "Windoors 11.3 Caretaker";
+const APP_NAME = FULL_TITLE;
 const host = import.meta.env.VITE_PUBLIC_HOSTNAME;
 const ogImage = host
   ? `https://og.grok.me/v1/card.png?host=${encodeURIComponent(host)}&title=${encodeURIComponent(APP_NAME)}`
@@ -26,7 +27,7 @@ export const Route = createRootRoute({
       },
       {
         name: "description",
-        content: "Keep your Windoors 11.3 PC healthy — run maintenance tools before system health hits zero.",
+        content: `Keep your Windoors ${VERSION_BASE} PC healthy — run maintenance tools before system health hits zero.`,
       },
       ...(ogImage
         ? [
