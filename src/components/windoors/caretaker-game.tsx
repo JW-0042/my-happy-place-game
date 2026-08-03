@@ -21,7 +21,9 @@ import {
 } from "lucide-react";
 import {
   APP_KEYS,
+  BIOS_BSOD_CHANCE,
   COLOR_STYLES,
+  DRAIN_BY_LEVEL,
   FULL_TITLE,
   PRODUCT_NAME,
   TASKS,
@@ -239,11 +241,16 @@ export function CaretakerGame() {
   const updateGenerationRef = useRef(0);
   const lastScanGenerationRef = useRef(-1);
   const [health, setHealth] = useState(100);
+  /** 3 = fastest decay, 1 = slowest (after successful BIOS flash). */
+  const [drainLevel, setDrainLevel] = useState<1 | 2 | 3>(3);
+  const drainLevelRef = useRef<1 | 2 | 3>(3);
   const [windows, setWindows] = useState<WindowState[]>([]);
   /** Always-current windows for sync reads (install gate, etc.) */
   const windowsRef = useRef<WindowState[]>([]);
   windowsRef.current = windows;
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const toastsRef = useRef<Toast[]>([]);
+  toastsRef.current = toasts;
   const [startOpen, setStartOpen] = useState(false);
   const [bsod, setBsod] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -333,15 +340,23 @@ export function CaretakerGame() {
   const openApp = useCallback(
     (appKey: AppKey) => {
       setWindows((list) => {
-        if (list.some((w) => w.appKey === appKey && !w.closing)) {
-          if (appKey === "scan" && !definitionsReadyRef.current) {
-            return list.map((w) =>
-              w.appKey === "scan" && !w.running && !w.complete
-                ? { ...w, needsUpdateFirst: true, phase: "Definitions outdated" }
-                : w,
-            );
-          }
-          return list;
+        const existing = list.find((w) => w.appKey === appKey && !w.closing);
+        if (existing) {
+          // Bring to foreground (even if idle / not running a task)
+          zSeq.current += 1;
+          const z = zSeq.current;
+          return list.map((w) => {
+            if (w.id !== existing.id) return w;
+            let next = { ...w, z };
+            if (appKey === "scan" && !definitionsReadyRef.current && !w.running && !w.complete) {
+              next = {
+                ...next,
+                needsUpdateFirst: true,
+                phase: "Definitions outdated",
+              };
+            }
+            return next;
+          });
         }
         const offset = list.length;
         zSeq.current += 1;
@@ -532,6 +547,8 @@ export function CaretakerGame() {
             : w,
         ),
       );
+      // Task is running — clear any notification nagging this tool (no penalty)
+      setToasts((list) => list.filter((t) => !(t.kind === "task" && t.appKey === appKey)));
 
       const tick = (now: number) => {
         const meta = taskStart.current.get(winId);
@@ -587,6 +604,60 @@ export function CaretakerGame() {
 
         if (progress >= 100) {
           cancelRaf(winId);
+
+          if (appKey === "bios") {
+            // Risky SPI flash: chance of fatal stop code
+            if (Math.random() < BIOS_BSOD_CHANCE) {
+              setWindows((list) =>
+                list.map((w) =>
+                  w.id === winId
+                    ? {
+                        ...w,
+                        running: false,
+                        complete: false,
+                        progress: 100,
+                        phase: "Capsule verification failed",
+                      }
+                    : w,
+                ),
+              );
+              window.setTimeout(() => setBsod(true), 700);
+              return;
+            }
+            // Success: firmware applied → cold reboot + lower degradation rate
+            const nextLevel = Math.max(1, drainLevelRef.current - 1) as 1 | 2 | 3;
+            drainLevelRef.current = nextLevel;
+            setDrainLevel(nextLevel);
+            for (const id of [...taskRaf.current.keys()]) cancelRaf(id);
+            setWindows([]);
+            setToasts([]);
+            setStartOpen(false);
+            setSearchOpen(false);
+            setCalendarOpen(false);
+            definitionsReadyRef.current = false;
+            setDefinitionsReady(false);
+            updateGenerationRef.current = 0;
+            lastScanGenerationRef.current = -1;
+            setHealthAbs(100);
+            setBootScreen(true);
+            setBooted(false);
+            window.setTimeout(() => {
+              setBootScreen(false);
+              setBooted(true);
+              setToasts((t) => [
+                ...t,
+                {
+                  id: nextId("bios-ok"),
+                  kind: "welcome",
+                  title: "UEFI capsule applied",
+                  body: "Platform firmware F.26 · ACPI _CST / HPET recalibrated · interrupt coalescing tightened. Cold boot complete — thermal trip margins improved under sustained load.",
+                },
+              ]);
+              openApp("scan");
+            }, 2600);
+            return;
+          }
+
           setWindows((list) =>
             list.map((w) =>
               w.id === winId
@@ -621,14 +692,23 @@ export function CaretakerGame() {
       const handle = requestAnimationFrame(tick);
       taskRaf.current.set(winId, handle);
     },
-    [applyHealth, cancelRaf, markDefinitionsFreshFromUpdate, markDefinitionsStale],
+    [
+      applyHealth,
+      cancelRaf,
+      markDefinitionsFreshFromUpdate,
+      markDefinitionsStale,
+      nextId,
+      openApp,
+      setHealthAbs,
+    ],
   );
 
   useEffect(() => {
     if (bsod || !booted) return;
     const id = window.setInterval(() => {
       if (healthRef.current <= 0) return;
-      applyHealth(-0.13);
+      const rate = DRAIN_BY_LEVEL[drainLevelRef.current];
+      applyHealth(-rate);
     }, 980);
     return () => window.clearInterval(id);
   }, [applyHealth, bsod, booted]);
@@ -639,7 +719,22 @@ export function CaretakerGame() {
     let timer: number;
     const spawn = () => {
       if (cancelled) return;
-      const appKey = APP_KEYS[Math.floor(Math.random() * APP_KEYS.length)];
+      // Only tools that are NOT actively running a task (open-but-idle still ok)
+      const runningKeys = new Set(
+        windowsRef.current.filter((w) => !w.closing && w.running).map((w) => w.appKey),
+      );
+      // Avoid stacking another toast for the same tool already on screen
+      const pendingKeys = new Set(
+        toastsRef.current
+          .filter((x) => x.kind === "task" && x.appKey && !x.leaving)
+          .map((x) => x.appKey!),
+      );
+      const candidates = APP_KEYS.filter((k) => !runningKeys.has(k) && !pendingKeys.has(k));
+      if (candidates.length === 0) {
+        timer = window.setTimeout(spawn, Math.random() * 8000 + 5000);
+        return;
+      }
+      const appKey = candidates[Math.floor(Math.random() * candidates.length)]!;
       const cfg = TASKS[appKey];
       const toastId = nextId("toast");
       setToasts((t) => [...t.slice(-4), { id: toastId, kind: "task", appKey, title: cfg.notifyTitle }]);
@@ -679,7 +774,7 @@ export function CaretakerGame() {
           id: nextId("welcome"),
           kind: "welcome",
           title: FULL_TITLE,
-          body: `Windoors ${VERSION} — August 2026 updates use 08-2026 naming. Check before install.`,
+          body: "Keep System Health above 0. Fix pop-up maintenance tasks before they expire — ignore them and health drops. Cancel a running tool and you lose health too. Survive.",
         },
       ]);
     }, 4800);
@@ -712,6 +807,8 @@ export function CaretakerGame() {
     setCalendarOpen(false);
     setBsod(false);
     setHealthAbs(100);
+    drainLevelRef.current = 3;
+    setDrainLevel(3);
     definitionsReadyRef.current = false;
     setDefinitionsReady(false);
     updateGenerationRef.current = 0;
@@ -785,12 +882,34 @@ export function CaretakerGame() {
         className={`absolute right-3 top-3 w-56 rounded-3xl border border-white/10 bg-black/40 p-4 shadow-2xl backdrop-blur-2xl sm:right-8 sm:top-8 sm:w-72 sm:p-5 ${health <= 40 ? "health-critical" : ""}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 sm:gap-3">
             <span className="text-lg text-red-400 sm:text-xl" aria-hidden>♥</span>
             <span className="text-[10px] font-semibold tracking-widest sm:text-sm">SYSTEM HEALTH</span>
           </div>
-          <span className={`font-mono text-2xl font-bold sm:text-3xl ${tone.color}`}>{Math.floor(health)}</span>
+          <div className="text-right">
+            <div className={`font-mono text-2xl font-bold leading-none sm:text-3xl ${tone.color}`}>
+              {Math.floor(health)}
+            </div>
+            <div
+              className={`mt-1 flex items-center justify-end gap-1.5 font-mono text-[10px] sm:text-[11px] ${
+                drainLevel === 3
+                  ? "text-red-400"
+                  : drainLevel === 2
+                    ? "text-amber-400"
+                    : "text-emerald-400"
+              }`}
+              title="Passive degradation rate"
+            >
+              <span className="tracking-tighter" aria-hidden>
+                {"<".repeat(drainLevel)}
+              </span>
+              <span className="tabular-nums opacity-90">
+                {DRAIN_BY_LEVEL[drainLevel].toFixed(2)}
+              </span>
+              <span className="text-[9px] opacity-50">/s</span>
+            </div>
+          </div>
         </div>
         <div className="h-2.5 overflow-hidden rounded-3xl bg-white/10 sm:h-3">
           <div className={`h-full rounded-3xl bg-gradient-to-r transition-[width] duration-300 ${tone.bar}`} style={{ width: `${health}%` }} />
@@ -817,6 +936,29 @@ export function CaretakerGame() {
           />
         ))}
       </div>
+
+      {/* Windows-style activation watermark (bottom-right, above taskbar) */}
+      {!bootScreen && !bsod && (
+        <div
+          className="pointer-events-none fixed bottom-[3.75rem] right-3 z-30 max-w-[min(90vw,280px)] select-none text-right sm:bottom-16 sm:right-5"
+          aria-label="Creator credit"
+        >
+          <div className="font-[Segoe_UI,system-ui,sans-serif] leading-snug">
+            <div className="text-[13px] font-normal text-white/45 sm:text-[15px]">
+              Created with GROK AI by
+            </div>
+            <a
+              href="https://x.com/thimothybsirius"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="pointer-events-auto mt-0.5 inline-block text-[12px] text-white/35 underline-offset-2 transition hover:text-white/70 hover:underline sm:text-[13px]"
+            >
+              https://x.com/thimothybsirius
+            </a>
+          </div>
+        </div>
+      )}
 
       <div className="taskbar-blur fixed bottom-0 left-0 right-0 z-50 flex h-14 items-center border-t border-white/10 px-2 sm:px-3" onClick={(e) => e.stopPropagation()}>
         <div className="flex h-full items-center gap-1">
@@ -899,7 +1041,7 @@ export function CaretakerGame() {
           </div>
           <div className="p-4 sm:p-6">
             <div className="mb-3 pl-1 text-xs uppercase tracking-widest text-white/50">Pinned</div>
-            <div className="grid grid-cols-4 gap-2 sm:gap-3">
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-3 sm:gap-3">
               {APP_KEYS.map((key) => {
                 const cfg = TASKS[key];
                 const Icon = cfg.icon;
@@ -1103,6 +1245,58 @@ function AppWindow({
     );
   } else if (win.appKey === "update") {
     body = <UpdatePanel win={win} styles={styles} onCheck={onCheckUpdates} onStart={onStart} />;
+  } else if (win.appKey === "bios") {
+    body = (
+      <>
+        <div className={`mb-3 text-center text-sm font-medium ${styles.icon}`}>{win.phase || "Ready"}</div>
+        <div className={`mb-4 rounded-2xl border p-4 text-xs sm:p-5 ${styles.border}`}>
+          <p className="font-semibold text-orange-200">Platform firmware · UEFI capsule</p>
+          <p className="mt-2 leading-relaxed text-white/70">
+            Flashing system firmware rewrites power-management tables (ACPI _CST / _PSS),
+            recalibrates the high-precision event timer, and tightens interrupt coalescing.
+            Under sustained load this usually lowers idle wake frequency and heat-soak drift.
+          </p>
+          <p className="mt-2 text-[11px] text-orange-200/80">
+            Warning: SPI write is non-atomic. Unexpected reset during erase/program may leave
+            the board unbootable (stop code: CRITICAL_PROCESS_DIED / firmware assert).
+          </p>
+          <ul className="mt-3 space-y-1 font-mono text-[10px] text-white/50">
+            <li>· Target: AMI Aptio V · socketed SoC mezzanine</li>
+            <li>· Payload: F.26 signed capsule (RSA-2048)</li>
+            <li>· Do not remove AC / interrupt flash cycle</li>
+          </ul>
+        </div>
+        {(win.running || win.progress > 0) && (
+          <div className="terminal-scan mb-4 h-28 overflow-auto rounded-2xl bg-black/60 p-3 font-mono text-[11px] text-orange-200/90">
+            {win.progress < 25 && <div>→ Authenticating capsule signature…</div>}
+            {win.progress >= 25 && <div>✓ Region map locked · starting SPI erase</div>}
+            {win.progress >= 45 && <div>→ Programming blocks 0x000000–0x7FFFFF…</div>}
+            {win.progress >= 70 && <div>→ Verifying hash chain…</div>}
+            {win.progress >= 90 && <div>→ Staging POST hand-off · reboot pending</div>}
+          </div>
+        )}
+        {!win.running && (
+          <button
+            type="button"
+            onClick={onStart}
+            className={`w-full rounded-3xl py-4 text-base font-semibold text-white shadow-lg transition-transform active:scale-[0.98] sm:py-5 sm:text-lg ${styles.button}`}
+          >
+            FLASH FIRMWARE
+          </button>
+        )}
+        {(win.running || win.progress > 0) && !win.complete && (
+          <div>
+            <div className="progress-container h-3 bg-zinc-800">
+              <div
+                className="progress-bar h-3"
+                style={{ width: `${win.progress}%`, "--bar-color": styles.bar } as CSSProperties}
+              />
+            </div>
+            <div className="mt-3 text-center text-xs tabular-nums">{Math.floor(win.progress)}%</div>
+          </div>
+        )}
+      </>
+    );
   } else {
     body = (
       <>

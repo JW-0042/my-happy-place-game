@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Bolt,
   CircleCheck,
+  Cpu,
   Download,
   FileCheck,
   HardDrive,
@@ -18,7 +19,8 @@ export type AppKey =
   | "chkdsk"
   | "sfc"
   | "drivers"
-  | "startup";
+  | "startup"
+  | "bios";
 
 export type ColorKey =
   | "blue"
@@ -28,7 +30,8 @@ export type ColorKey =
   | "teal"
   | "indigo"
   | "sky"
-  | "rose";
+  | "rose"
+  | "orange";
 
 /** Full static Tailwind class maps — dynamic `text-${color}-400` never works with Tailwind. */
 export const COLOR_STYLES: Record<
@@ -96,6 +99,13 @@ export const COLOR_STYLES: Record<
     button: "bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400",
     border: "border-rose-400/60 bg-rose-950/80",
     badgeBg: "from-rose-500 to-pink-400",
+  },
+  orange: {
+    icon: "text-orange-400",
+    bar: "#fb923c",
+    button: "bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400",
+    border: "border-orange-400/60 bg-orange-950/80",
+    badgeBg: "from-orange-500 to-amber-400",
   },
 };
 
@@ -192,11 +202,34 @@ export const TASKS: Record<AppKey, TaskConfig> = {
     phases: ["Analyzing", "Disabling", "Optimizing"],
     notifyTitle: "Slow boot",
   },
+  bios: {
+    key: "bios",
+    name: "BIOS (UEFI) Update",
+    shortName: "BIOS",
+    icon: Cpu,
+    color: "orange",
+    duration: 48000,
+    phases: ["Validating", "Erasing SPI", "Flashing", "Verifying capsule"],
+    notifyTitle: "Firmware outdated",
+  },
 };
 
 export const APP_KEYS = Object.keys(TASKS) as AppKey[];
+
+/**
+ * Passive health drain per ~1s tick.
+ * Level 3 = aggressive thermal/timer drift, 1 = stabilized after firmware work.
+ */
+export const DRAIN_BY_LEVEL: Record<1 | 2 | 3, number> = {
+  3: 0.28,
+  2: 0.18,
+  1: 0.09,
+};
 
 /** 11.3 — funny nod to Windows 3.11 */
 export const VERSION = "11.3";
 export const PRODUCT_NAME = "Windoors";
 export const FULL_TITLE = `Windoors ${VERSION} Caretaker`;
+
+/** Chance BIOS flash ends in unrecoverable stop (BSOD). */
+export const BIOS_BSOD_CHANCE = 0.32;
