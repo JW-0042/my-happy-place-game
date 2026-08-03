@@ -9,6 +9,7 @@ import {
   HardDrive,
   Headphones,
   Microchip,
+  Settings,
   ShieldHalf,
   SprayCan,
 } from "lucide-react";
@@ -24,7 +25,8 @@ export type AppKey =
   | "startup"
   | "bios"
   | "support"
-  | "browser";
+  | "browser"
+  | "settings";
 
 export type ColorKey =
   | "blue"
@@ -252,6 +254,16 @@ export const TASKS: Record<AppKey, TaskConfig> = {
     phases: ["Browsing"],
     notifyTitle: "Browse the intranet",
   },
+  settings: {
+    key: "settings",
+    name: "Settings",
+    shortName: "Settings",
+    icon: Settings,
+    color: "slate",
+    duration: 1,
+    phases: ["Configured"],
+    notifyTitle: "Settings",
+  },
 };
 
 export const APP_KEYS = Object.keys(TASKS) as AppKey[];
@@ -283,7 +295,7 @@ export const VERSION_BASE = "11.3";
  * **Bump +1 on every shippable change** from now on.
  * Displayed as: 11.3.XXXXX
  */
-export const BUILD = 8;
+export const BUILD = 11;
 
 /** Full version string: 11.3.00001, 11.3.00002, … */
 export const VERSION = `${VERSION_BASE}.${String(BUILD).padStart(5, "0")}`;
@@ -303,6 +315,12 @@ export const BIOS_BSOD_CHANCE = 0.32;
 
 export const CREATOR_X_URL = "https://x.com/thimothybsirius";
 export const CREATOR_X_HANDLE = "x.com/thimothybsirius";
+
+/** Purely coincidental product key (do not enter anywhere real). First 5 = user-filled. */
+export const PRODUCT_KEY = "XXXXX-GROK-AI-42";
+export const PRODUCT_KEY_SUFFIX = "GROK-AI-42";
+/** Legendary XP key easter egg (case-insensitive, dashes optional). */
+export const XP_LEGENDARY_KEY = "FCKGW-RHQQ2-YXRKT-8TG6W-2B7Q8";
 
 /** Only page Internet Discovery Browser is allowed to open by default. */
 export const BROWSER_HOME = "https://macrohard.space/";

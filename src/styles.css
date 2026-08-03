@@ -448,3 +448,58 @@
   background: rgb(255 160 60 / 0.12);
   mix-blend-mode: multiply;
 }
+
+
+/* XP True OG confetti */
+.confetti-layer {
+  overflow: hidden;
+}
+.confetti-piece {
+  --i: 0;
+  position: absolute;
+  top: -12px;
+  left: calc(2% + (var(--i) * 2.05%));
+  width: 8px;
+  height: 12px;
+  border-radius: 2px;
+  opacity: 0.95;
+  background: hsl(calc(var(--i) * 17), 85%, 60%);
+  animation: confettiFall calc(2.2s + (var(--i) * 0.04s)) linear forwards;
+  animation-delay: calc(var(--i) * 18ms);
+  transform: rotate(calc(var(--i) * 23deg));
+}
+.confetti-piece:nth-child(3n) {
+  width: 6px;
+  height: 10px;
+  background: #fbbf24;
+}
+.confetti-piece:nth-child(4n) {
+  background: #38bdf8;
+}
+.confetti-piece:nth-child(5n) {
+  background: #f472b6;
+  border-radius: 50%;
+}
+@keyframes confettiFall {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(110vh) rotate(720deg);
+    opacity: 0.15;
+  }
+}
+.og-banner {
+  animation: ogPop 600ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+@keyframes ogPop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}

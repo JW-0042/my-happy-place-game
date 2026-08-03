@@ -38,10 +38,13 @@ import {
   CREATOR_X_URL,
   DRAIN_BY_LEVEL,
   FULL_TITLE,
+  PRODUCT_KEY,
+  PRODUCT_KEY_SUFFIX,
   PRODUCT_NAME,
   SUPPORT_DRAIN_BUMP,
   TASKS,
   VERSION,
+  XP_LEGENDARY_KEY,
   type AppKey,
 } from "@/lib/windoors/config";
 import { DefragMap } from "@/components/windoors/defrag-map";
@@ -356,6 +359,7 @@ export function CaretakerGame() {
   /** Always-current windows for sync reads (install gate, etc.) */
   const windowsRef = useRef<WindowState[]>([]);
   windowsRef.current = windows;
+
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastsRef = useRef<Toast[]>([]);
   toastsRef.current = toasts;
@@ -369,6 +373,15 @@ export function CaretakerGame() {
   const [volumeLevel, setVolumeLevel] = useState(72);
   const [wifiOn, setWifiOn] = useState(true);
   const [nightLight, setNightLight] = useState(false);
+  const [telemetryOptOut, setTelemetryOptOut] = useState(false);
+  const telemetryTimer = useRef<number | null>(null);
+  /** Post–Windoors Update restart dialog (BIOS uses its own cold boot path). */
+  const [updateRestartPrompt, setUpdateRestartPrompt] = useState(false);
+  const [windoorsActivated, setWindoorsActivated] = useState(false);
+  const [trueOg, setTrueOg] = useState(false);
+  const trueOgRef = useRef(false);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [ogBanner, setOgBanner] = useState(false);
   const [booted, setBooted] = useState(false);
   const [bootScreen, setBootScreen] = useState(true);
   const isMobile = useIsNarrow(640);
@@ -382,7 +395,49 @@ export function CaretakerGame() {
     [reactId],
   );
 
+  // Telemetry "opt-out" that re-enables itself (purely coincidental UX)
+  useEffect(() => {
+    if (!telemetryOptOut) {
+      if (telemetryTimer.current != null) {
+        window.clearTimeout(telemetryTimer.current);
+        telemetryTimer.current = null;
+      }
+      return;
+    }
+    telemetryTimer.current = window.setTimeout(() => {
+      setTelemetryOptOut(false);
+      telemetryTimer.current = null;
+      const id = nextId("telem");
+      setToasts((t) => [
+        ...t.slice(-4),
+        {
+          id,
+          kind: "info" as const,
+          title: "Diagnostic data sharing restored",
+          body: "Your preference was noted, then gently ignored for quality of service.",
+        },
+      ]);
+      window.setTimeout(() => {
+        setToasts((list) => list.map((x) => (x.id === id ? { ...x, leaving: true } : x)));
+        window.setTimeout(() => setToasts((list) => list.filter((x) => x.id !== id)), 350);
+      }, 6000);
+    }, 5000);
+    return () => {
+      if (telemetryTimer.current != null) {
+        window.clearTimeout(telemetryTimer.current);
+        telemetryTimer.current = null;
+      }
+    };
+  }, [telemetryOptOut, nextId]);
+
   const applyHealth = useCallback((delta: number) => {
+    if (trueOgRef.current) {
+      setHealth((h) => {
+        healthRef.current = 100;
+        return 100;
+      });
+      return;
+    }
     setHealth((h) => {
       const next = clamp(h + delta, 0, 100);
       healthRef.current = next;
@@ -495,6 +550,42 @@ export function CaretakerGame() {
       }, 300);
     },
     [applyHealth, cancelRaf, endSupportSession],
+  );
+
+
+  const activateWindoors = useCallback(
+    (segmentOrKey: string) => {
+      const raw = segmentOrKey.trim();
+      if (!raw) return { ok: false as const, reason: "empty" };
+
+      const alnum = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
+      const xp = XP_LEGENDARY_KEY.replace(/-/g, "");
+      // Accept exact XP key or any input that contains the full legendary sequence
+      const isXp =
+        alnum === xp ||
+        alnum.includes(xp) ||
+        // "any combination" of the 5 XP blocks in order
+        XP_LEGENDARY_KEY.split("-").every((block: string) => alnum.includes(block));
+
+      if (isXp) {
+        trueOgRef.current = true;
+        setTrueOg(true);
+        setWindoorsActivated(true);
+        setHealthAbs(100);
+        setShowConfetti(true);
+        setOgBanner(true);
+        window.setTimeout(() => setShowConfetti(false), 6500);
+        return { ok: true as const, trueOg: true as const };
+      }
+
+      // Anything else with at least 5 chars fills the XXXXX slot
+      if (alnum.length < 5 && raw.replace(/[^A-Za-z0-9]/g, "").length < 5) {
+        return { ok: false as const, reason: "short" };
+      }
+      setWindoorsActivated(true);
+      return { ok: true as const, trueOg: false as const };
+    },
+    [setHealthAbs],
   );
 
   const openApp = useCallback(
@@ -891,12 +982,24 @@ export function CaretakerGame() {
             }, 300);
           }
           applyHealth(24);
-          if (appKey === "update") markDefinitionsFreshFromUpdate();
+          if (appKey === "update") {
+            markDefinitionsFreshFromUpdate();
+            // Restart required (separate from BIOS cold boot)
+            setUpdateRestartPrompt(true);
+          }
           if (appKey === "scan") {
             lastScanGenerationRef.current = updateGenerationRef.current;
             window.setTimeout(() => {
               if (Math.random() < 0.7) markDefinitionsStale();
             }, 8000 + Math.random() * 12000);
+          }
+          let successBody = "+24 system health restored";
+          if (appKey === "cleanup") {
+            const gb = (1.4 + Math.random() * 9.2).toFixed(1);
+            const items = Math.floor(400 + Math.random() * 4800);
+            successBody = `Freed ${gb} GB of temporary regret (${items} temp objects) · +24 health`;
+          } else if (appKey === "update") {
+            successBody = "Updates installed · restart required to finish servicing stack";
           }
           const doneId = nextId("done");
           setToasts((t) => [
@@ -906,7 +1009,7 @@ export function CaretakerGame() {
               kind: "success" as const,
               appKey,
               title: `${cfg.name} complete`,
-              body: "+24 system health restored",
+              body: successBody,
             },
           ]);
           window.setTimeout(() => {
@@ -942,6 +1045,11 @@ export function CaretakerGame() {
     if (bsod || !booted) return;
     const id = window.setInterval(() => {
       if (healthRef.current <= 0) return;
+      // True OG: XP key — health never degrades, always 100%
+      if (trueOgRef.current) {
+        if (healthRef.current < 100) setHealthAbs(100);
+        return;
+      }
       if (supportActiveRef.current) return; // Remote Support session freezes decay
       const rate = DRAIN_BY_LEVEL[drainLevelRef.current] + drainBoostRef.current;
       applyHealth(-rate);
@@ -1046,6 +1154,89 @@ export function CaretakerGame() {
     if (openAppKey) openApp(openAppKey);
   };
 
+
+  const performUpdateRestart = useCallback(() => {
+    setUpdateRestartPrompt(false);
+    for (const id of [...taskRaf.current.keys()]) cancelRaf(id);
+    setWindows([]);
+    setToasts([]);
+    setStartOpen(false);
+    setSearchOpen(false);
+    setCalendarOpen(false);
+    setBatteryOpen(false);
+    setActionCenterOpen(false);
+    // Random post-update calibration of degradation (improve OR worsen)
+    const roll = Math.random();
+    let outcome: "better" | "worse";
+    let body: string;
+    if (roll < 0.5) {
+      outcome = "better";
+      const next = Math.max(1, drainLevelRef.current - 1) as 1 | 2 | 3;
+      drainLevelRef.current = next;
+      setDrainLevel(next);
+      // slight boost relief if any
+      if (drainBoostRef.current > 0) {
+        drainBoostRef.current = Math.max(0, drainBoostRef.current - 0.015);
+        setDrainBoost(drainBoostRef.current);
+      }
+      body =
+        "Servicing stack rebased power plans (Balanced++). Timer resolution and idle residency improved — background heat-soak drift is lower.";
+    } else {
+      outcome = "worse";
+      const next = Math.min(3, drainLevelRef.current + 1) as 1 | 2 | 3;
+      drainLevelRef.current = next;
+      setDrainLevel(next);
+      drainBoostRef.current = Math.min(0.2, drainBoostRef.current + 0.02);
+      setDrainBoost(drainBoostRef.current);
+      body =
+        "Feature payload re-enabled diagnostic sampling. Additional wake sources registered — passive degradation accelerated under sustained load.";
+    }
+    const keepHealth = Math.min(100, Math.max(35, healthRef.current));
+    setHealthAbs(keepHealth);
+    setBootScreen(true);
+    setBooted(false);
+    window.setTimeout(() => {
+      setBootScreen(false);
+      setBooted(true);
+      setToasts((t) => [
+        ...t,
+        {
+          id: nextId("upd-rst"),
+          kind: "welcome",
+          title:
+            outcome === "better"
+              ? "Update restart complete · stability improved"
+              : "Update restart complete · new overhead detected",
+          body,
+        },
+      ]);
+    }, 2400);
+  }, [cancelRaf, nextId, setHealthAbs]);
+
+  const scheduleUpdateRestartJoke = useCallback(
+    (when: "tonight" | "never") => {
+      setUpdateRestartPrompt(false);
+      const id = nextId("upd-later");
+      setToasts((t) => [
+        ...t.slice(-4),
+        {
+          id,
+          kind: "info" as const,
+          title: when === "tonight" ? "Restart scheduled for tonight" : "Restart deferred",
+          body:
+            when === "tonight"
+              ? "We'll try again at 03:00 (local time may vary across dimensions)."
+              : "Noted for three days from never. Servicing stack remains in a Schrödinger state.",
+        },
+      ]);
+      window.setTimeout(() => {
+        setToasts((list) => list.map((x) => (x.id === id ? { ...x, leaving: true } : x)));
+        window.setTimeout(() => setToasts((list) => list.filter((x) => x.id !== id)), 350);
+      }, 7000);
+    },
+    [nextId],
+  );
+
   const restartGame = () => {
     for (const id of [...taskRaf.current.keys()]) cancelRaf(id);
     setWindows([]);
@@ -1055,6 +1246,13 @@ export function CaretakerGame() {
     setCalendarOpen(false);
     setBatteryOpen(false);
     setActionCenterOpen(false);
+    setUpdateRestartPrompt(false);
+    setTelemetryOptOut(false);
+    setWindoorsActivated(false);
+    setTrueOg(false);
+    trueOgRef.current = false;
+    setShowConfetti(false);
+    setOgBanner(false);
     setBsod(false);
     setHealthAbs(100);
     drainLevelRef.current = 3;
@@ -1356,18 +1554,46 @@ export function CaretakerGame() {
             onPatchWin={(patch) =>
               setWindows((list) => list.map((w) => (w.id === win.id ? { ...w, ...patch } : w)))
             }
+            windoorsActivated={windoorsActivated}
+            trueOg={trueOg}
+            onActivateKey={activateWindoors}
           />
         ))}
       </div>
 
-      {/* Windows-style activation watermark (bottom-right, above taskbar) */}
+      {/* Activation watermark — purely coincidental resemblance */}
       {!bootScreen && !bsod && (
         <div
-          className="pointer-events-none fixed bottom-[4.25rem] right-2 z-20 max-w-[min(70vw,240px)] select-none text-right sm:bottom-16 sm:right-5"
-          aria-label="Creator credit"
+          className="pointer-events-none fixed bottom-[4.25rem] right-2 z-20 max-w-[min(78vw,280px)] select-none text-right sm:bottom-16 sm:right-5"
+          aria-label={windoorsActivated ? "Creator credit" : "Activation watermark"}
         >
           <div className="font-[Segoe_UI,system-ui,sans-serif] leading-snug">
-            <div className="text-[11px] font-normal text-white/40 sm:text-[15px] sm:text-white/45">
+            {!windoorsActivated && (
+              <>
+                <div className="text-[12px] font-normal text-white/45 sm:text-[16px] sm:text-white/50">
+                  Activate {PRODUCT_NAME}
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openApp("settings");
+                  }}
+                  className="pointer-events-auto mt-0.5 text-[10px] text-white/35 underline-offset-2 hover:text-white/70 hover:underline sm:text-[13px] sm:text-white/40"
+                >
+                  Go to Settings to activate {PRODUCT_NAME}.
+                </button>
+                <div className="mt-1 font-mono text-[9px] tracking-wide text-white/30 sm:text-[11px]">
+                  Product Key: {PRODUCT_KEY}
+                </div>
+              </>
+            )}
+            {trueOg && (
+              <div className="mb-1 text-[11px] font-semibold text-amber-300/90 sm:text-sm">
+                True OG · XP forever
+              </div>
+            )}
+            <div className={`text-[10px] font-normal text-white/30 sm:text-[12px] sm:text-white/35 ${windoorsActivated ? "" : "mt-2"}`}>
               Created with GROK AI by
             </div>
             <a
@@ -1375,7 +1601,7 @@ export function CaretakerGame() {
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="pointer-events-auto mt-0.5 inline-block break-all text-[10px] text-white/30 underline-offset-2 transition hover:text-white/70 hover:underline sm:text-[13px] sm:text-white/35"
+              className="pointer-events-auto mt-0.5 inline-block break-all text-[9px] text-white/25 underline-offset-2 transition hover:text-white/70 hover:underline sm:text-[12px] sm:text-white/30"
             >
               <span className="sm:hidden">@thimothybsirius</span>
               <span className="hidden sm:inline">https://x.com/thimothybsirius</span>
@@ -1737,6 +1963,28 @@ export function CaretakerGame() {
                 );
               })}
             </div>
+            <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-black/30 px-3 py-3 text-left">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-white/30 accent-sky-400"
+                checked={telemetryOptOut}
+                onChange={(e) => setTelemetryOptOut(e.target.checked)}
+              />
+              <span className="min-w-0">
+                <span className="block text-xs font-medium text-white/85">
+                  Optional diagnostic data
+                </span>
+                <span className="mt-0.5 block text-[11px] leading-snug text-white/45">
+                  Uncheck to opt out of sending typing cadence, window focus entropy, and
+                  ambient regret metrics to Macrohard*. (*Purely coincidental name.)
+                </span>
+                {telemetryOptOut && (
+                  <span className="mt-1 block text-[10px] text-amber-300/90">
+                    Preference saved… applying policy…
+                  </span>
+                )}
+              </span>
+            </label>
           </div>
         </div>
       )}
@@ -1784,6 +2032,78 @@ export function CaretakerGame() {
             />
           ))}
       </div>
+
+
+      {/* XP confetti + True OG banner */}
+      {showConfetti && (
+        <div className="confetti-layer pointer-events-none fixed inset-0 z-[95]" aria-hidden>
+          {Array.from({ length: 48 }, (_, i) => (
+            <span key={i} className="confetti-piece" style={{ "--i": i } as CSSProperties} />
+          ))}
+        </div>
+      )}
+      {ogBanner && (
+        <div className="pointer-events-none fixed inset-x-0 top-[18%] z-[96] flex justify-center px-4">
+          <div className="og-banner rounded-xl border border-amber-300/40 bg-black/75 px-6 py-4 text-center shadow-2xl backdrop-blur-md sm:px-10 sm:py-5">
+            <p className="text-2xl font-bold tracking-tight text-amber-300 sm:text-4xl">You are True OG</p>
+            <p className="mt-2 text-sm text-white/80 sm:text-base">Your XP just +++</p>
+            <p className="mt-1 text-[11px] text-white/50">Health locked at 100% · degradation disabled</p>
+          </div>
+        </div>
+      )}
+
+      {/* Windoors Update — Restart required (BIOS uses separate cold-boot path) */}
+      {updateRestartPrompt && !bsod && !bootScreen && (
+        <div
+          className="fixed inset-0 z-[90] flex items-end justify-center bg-black/55 p-3 backdrop-blur-[2px] sm:items-center sm:p-6"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            className="w-full max-w-md overflow-hidden rounded-xl border border-white/10 bg-[#1c1c1e]/98 shadow-2xl"
+            role="dialog"
+            aria-labelledby="restart-required-title"
+          >
+            <div className="border-b border-white/10 bg-sky-600/90 px-5 py-3">
+              <p id="restart-required-title" className="text-sm font-semibold text-white">
+                Restart required
+              </p>
+            </div>
+            <div className="space-y-3 px-5 py-4 text-sm text-white/80">
+              <p>
+                One or more updates need a restart to finish installing. Until then, some
+                features may feel slightly theoretical.
+              </p>
+              <p className="text-[11px] text-white/45">
+                Post-restart calibration may raise or lower background degradation — results
+                vary by servicing stack mood.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 border-t border-white/10 bg-black/20 px-4 py-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => scheduleUpdateRestartJoke("never")}
+                className="rounded-lg border border-white/10 px-4 py-2.5 text-xs font-medium text-white/60 hover:bg-white/5"
+              >
+                Three days from never
+              </button>
+              <button
+                type="button"
+                onClick={() => scheduleUpdateRestartJoke("tonight")}
+                className="rounded-lg border border-white/15 bg-white/5 px-4 py-2.5 text-xs font-medium text-white/80 hover:bg-white/10"
+              >
+                Tonight
+              </button>
+              <button
+                type="button"
+                onClick={performUpdateRestart}
+                className="rounded-lg bg-sky-500 px-4 py-2.5 text-xs font-semibold text-white hover:bg-sky-400"
+              >
+                Restart now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {bsod && (
         <div className="fixed inset-0 z-[9999] flex flex-col justify-center overflow-y-auto bg-[var(--color-bsod)] px-6 py-10 text-white sm:px-16 md:px-24">
@@ -1843,6 +2163,151 @@ export function CaretakerGame() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+
+
+function normalizeKey(input: string) {
+  return input.toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function SettingsPanel({
+  styles,
+  activated,
+  trueOg,
+  onActivate,
+  onClose,
+}: {
+  styles: (typeof COLOR_STYLES)[keyof typeof COLOR_STYLES];
+  activated: boolean;
+  trueOg: boolean;
+  onActivate: (key: string) => { ok: boolean; trueOg?: boolean; reason?: string };
+  onClose: () => void;
+}) {
+  const [segment, setSegment] = useState("");
+  const [fullPaste, setFullPaste] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const tryActivate = () => {
+    setErr(null);
+    setMsg(null);
+    const full = fullPaste.trim();
+    const seg = segment.trim();
+    // Prefer full paste when provided; else build from 5-char segment + suffix
+    const primary = full.length > 0 ? full : seg.length > 0 ? `${seg}-${PRODUCT_KEY_SUFFIX}` : "";
+    const result = onActivate(primary);
+    if (!result.ok && seg.length >= 5) {
+      // retry segment alone (for easter-egg partial pastes)
+      const retry = onActivate(seg);
+      if (retry.ok) {
+        if (retry.trueOg) {
+          setMsg("You are True OG. Your XP just +++ · health degradation disabled.");
+        } else {
+          setMsg(`${PRODUCT_NAME} has been activated. Thank you for your support (purely coincidental).`);
+        }
+        return;
+      }
+    }
+    if (!result.ok) {
+      setErr(
+        result.reason === "short"
+          ? "Enter the 5 characters shown as XXXXX on the desktop (anything works)."
+          : "Enter a product key to continue.",
+      );
+      return;
+    }
+    if (result.trueOg) {
+      setMsg("You are True OG. Your XP just +++ · health degradation disabled.");
+    } else {
+      setMsg(`${PRODUCT_NAME} has been activated. Thank you for your support (purely coincidental).`);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className={`text-sm font-semibold ${styles.icon}`}>System → Activation</p>
+        <p className="mt-1 text-xs text-white/50">
+          Version {VERSION} · Product Key hint on desktop:{" "}
+          <span className="font-mono text-white/70">{PRODUCT_KEY}</span>
+        </p>
+      </div>
+
+      {trueOg ? (
+        <div className="rounded-xl border border-amber-400/40 bg-amber-950/40 p-4 text-center">
+          <p className="text-lg font-bold text-amber-300">You are True OG</p>
+          <p className="mt-1 text-sm text-white/70">Your XP just +++</p>
+          <p className="mt-2 text-xs text-white/50">Health locked at 100%. Degradation is a myth now.</p>
+        </div>
+      ) : activated ? (
+        <div className="rounded-xl border border-emerald-400/35 bg-emerald-950/35 p-4 text-center">
+          <p className="font-semibold text-emerald-300">{PRODUCT_NAME} is activated</p>
+          <p className="mt-1 text-xs text-white/55">Activation watermark cleared. Creator credit remains.</p>
+        </div>
+      ) : (
+        <>
+          <div className="rounded-xl border border-white/10 bg-black/35 p-4">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-white/45">
+              Product key
+            </p>
+            <p className="mt-1 text-xs text-white/55">
+              Type the <span className="font-semibold text-white/80">5 characters</span> shown as{" "}
+              <span className="font-mono">XXXXX</span> on the desktop. Anything is accepted.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                maxLength={5}
+                value={segment}
+                onChange={(e) =>
+                  setSegment(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5))
+                }
+                placeholder="XXXXX"
+                className="w-28 rounded-lg border border-white/15 bg-zinc-900 px-3 py-2 font-mono text-sm tracking-widest text-white outline-none ring-sky-400/40 focus:ring-2"
+                aria-label="First five characters of product key"
+              />
+              <span className="font-mono text-sm text-white/50">-{PRODUCT_KEY_SUFFIX}</span>
+            </div>
+            <p className="mt-3 text-[11px] text-white/40">Or paste a full key:</p>
+            <input
+              type="text"
+              value={fullPaste}
+              onChange={(e) => setFullPaste(e.target.value)}
+              placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX"
+              className="mt-1.5 w-full rounded-lg border border-white/15 bg-zinc-900 px-3 py-2 font-mono text-xs text-white outline-none ring-sky-400/40 focus:ring-2 sm:text-sm"
+              aria-label="Full product key"
+            />
+          </div>
+          {err && <p className="text-xs text-red-400">{err}</p>}
+          <button
+            type="button"
+            onClick={tryActivate}
+            className={`w-full rounded-xl py-3.5 text-sm font-semibold text-white shadow-lg ${styles.button}`}
+          >
+            Activate {PRODUCT_NAME}
+          </button>
+        </>
+      )}
+
+      {msg && !trueOg && <p className="text-center text-xs text-emerald-300/90">{msg}</p>}
+      {msg && trueOg && <p className="text-center text-xs text-amber-300/90">{msg}</p>}
+
+      <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-[11px] leading-relaxed text-white/45">
+        Optional diagnostic data, night light, and other myths live elsewhere. This panel only
+        handles activation. Any resemblance to real license keys is purely coincidental and
+        nostalgic.
+      </div>
+
+      <button
+        type="button"
+        onClick={onClose}
+        className="w-full rounded-xl border border-white/15 py-2.5 text-sm text-white/70 hover:bg-white/5"
+      >
+        Close
+      </button>
     </div>
   );
 }
@@ -1976,6 +2441,9 @@ function AppWindow({
   onCallSupport,
   onFinishSupport,
   onPatchWin,
+  windoorsActivated,
+  trueOg,
+  onActivateKey,
 }: {
   win: WindowState;
   isMobileLayout: boolean;
@@ -1991,6 +2459,9 @@ function AppWindow({
   onCallSupport: () => void;
   onFinishSupport: () => void;
   onPatchWin: (patch: Partial<WindowState>) => void;
+  windoorsActivated: boolean;
+  trueOg: boolean;
+  onActivateKey: (key: string) => { ok: boolean; trueOg?: boolean; reason?: string };
 }) {
   const cfg = TASKS[win.appKey];
   const styles = COLOR_STYLES[cfg.color];
@@ -2251,6 +2722,16 @@ function AppWindow({
         )}
       </>
     );
+  } else if (win.appKey === "settings") {
+    body = (
+      <SettingsPanel
+        styles={styles}
+        activated={windoorsActivated}
+        trueOg={trueOg}
+        onActivate={onActivateKey}
+        onClose={onCloseIdle}
+      />
+    );
   } else if (win.appKey === "browser") {
     body = <BrowserPanel styles={styles} />;
   } else if (win.appKey === "chkdsk") {
@@ -2437,7 +2918,7 @@ function UpdatePanel({
           <Check className="mx-auto h-12 w-12 text-emerald-400 sm:h-14 sm:w-14" strokeWidth={2.5} />
           <h3 className="mt-3 text-lg font-semibold text-emerald-300">All updates are installed</h3>
           <p className="mt-2 text-sm text-white/60">
-            This device has the latest 08-2026 packages. You're protected — until the next catalog wave.
+            This device has the latest 08-2026 packages. A restart may still be pending to seal the servicing stack.
           </p>
           {win.updateHeadline && (
             <p className="mt-3 text-[11px] text-white/40">Last installed: {win.updateHeadline}</p>
