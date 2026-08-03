@@ -22,13 +22,13 @@
 ### Windoors Update catalog
 ![Update catalog with KB packages](screenshots/update-catalog.png)
 
-### Check Disk (ScanDisk nostalgia)
+### Check Disk 
 ![Check Disk with floppy A: selected](screenshots/chkdsk-scandisk.png)
 
-### Remote Support (creator credit + pause drain)
+### Remote Support 
 ![Remote Support session with Grok AI credit](screenshots/remote-support.png)
 
-### Game over — BSOD credit screen
+### Game over — BSOD
 ![Blue screen of death with QR to creator X profile](screenshots/bsod-credit.png)
 
 ### Mobile layout
