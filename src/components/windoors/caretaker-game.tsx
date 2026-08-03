@@ -11,12 +11,15 @@ import {
 import {
   AlertTriangle,
   BatteryFull,
+  Bluetooth,
   Check,
+  ChevronUp,
   Disc3,
   Download,
   ExternalLink,
   HardDrive,
   Lock,
+  Plane,
   RefreshCw,
   RotateCw,
   Search,
@@ -361,7 +364,11 @@ export function CaretakerGame() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [batteryOpen, setBatteryOpen] = useState(false);
+  const [actionCenterOpen, setActionCenterOpen] = useState(false);
   const [healthExpanded, setHealthExpanded] = useState(false);
+  const [volumeLevel, setVolumeLevel] = useState(72);
+  const [wifiOn, setWifiOn] = useState(true);
+  const [nightLight, setNightLight] = useState(false);
   const [booted, setBooted] = useState(false);
   const [bootScreen, setBootScreen] = useState(true);
   const isMobile = useIsNarrow(640);
@@ -1046,6 +1053,8 @@ export function CaretakerGame() {
     setStartOpen(false);
     setSearchOpen(false);
     setCalendarOpen(false);
+    setBatteryOpen(false);
+    setActionCenterOpen(false);
     setBsod(false);
     setHealthAbs(100);
     drainLevelRef.current = 3;
@@ -1078,11 +1087,12 @@ export function CaretakerGame() {
         return;
       }
       if (e.key === "Escape") {
-        if (startOpen || searchOpen || calendarOpen || batteryOpen) {
+        if (startOpen || searchOpen || calendarOpen || batteryOpen || actionCenterOpen) {
           setStartOpen(false);
           setSearchOpen(false);
           setCalendarOpen(false);
           setBatteryOpen(false);
+          setActionCenterOpen(false);
           e.preventDefault();
           return;
         }
@@ -1107,6 +1117,7 @@ export function CaretakerGame() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [
+    actionCenterOpen,
     batteryOpen,
     bootScreen,
     booted,
@@ -1130,7 +1141,7 @@ export function CaretakerGame() {
 
   return (
     <div
-      className="desktop-wallpaper mobile-safe relative h-[100dvh] max-h-[100dvh] w-full touch-manipulation overflow-hidden text-white select-none sm:h-[calc(100dvh-var(--grok-banner-h,0px))]"
+      className={`desktop-wallpaper mobile-safe relative h-[100dvh] max-h-[100dvh] w-full touch-manipulation overflow-hidden text-white select-none sm:h-[calc(100dvh-var(--grok-banner-h,0px))] ${nightLight ? "night-light-on" : ""}`}
       style={{
         height: "calc(100dvh - var(--grok-banner-h, 0px))",
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
@@ -1140,6 +1151,7 @@ export function CaretakerGame() {
         setSearchOpen(false);
         setCalendarOpen(false);
         setBatteryOpen(false);
+        setActionCenterOpen(false);
         setHealthExpanded(false);
       }}
     >
@@ -1373,11 +1385,12 @@ export function CaretakerGame() {
       )}
 
       <div
-        className="taskbar-blur fixed bottom-0 left-0 right-0 z-50 flex h-14 items-center border-t border-white/10 px-1.5 sm:px-3"
+        className="taskbar-blur fixed bottom-0 left-0 right-0 z-50 flex h-14 items-center border-t border-white/10 px-1 sm:px-3"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex h-full shrink-0 items-center gap-0.5">
+        {/* Left: Start (+ search on desktop) */}
+        <div className="flex h-full w-11 shrink-0 items-center sm:w-auto sm:gap-0.5">
           <button
             type="button"
             aria-label="Start menu"
@@ -1386,8 +1399,9 @@ export function CaretakerGame() {
               setSearchOpen(false);
               setCalendarOpen(false);
               setBatteryOpen(false);
+              setActionCenterOpen(false);
             }}
-            className="flex h-11 w-11 items-center justify-center rounded-2xl text-white transition-all hover:bg-white/10 active:scale-95 sm:h-10 sm:w-10"
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-white transition-all hover:bg-white/10 active:scale-95 sm:h-10 sm:w-10"
           >
             <WindoorsLogo className="h-6 w-6" uid={`${logoUid}-task`} />
           </button>
@@ -1398,6 +1412,7 @@ export function CaretakerGame() {
               setStartOpen(false);
               setCalendarOpen(false);
               setBatteryOpen(false);
+              setActionCenterOpen(false);
             }}
             className="hidden h-9 w-48 items-center rounded-xl bg-white/10 px-4 text-sm transition-all hover:bg-white/20 sm:flex sm:w-72 lg:w-80"
           >
@@ -1405,7 +1420,9 @@ export function CaretakerGame() {
             <span className="truncate text-white/70">Search maintenance tools…</span>
           </button>
         </div>
-        <div className="taskbar-apps flex min-w-0 flex-1 items-center justify-center gap-0.5 overflow-x-auto px-0.5 sm:gap-1 sm:px-1">
+
+        {/* Center: dock / all apps — never crushed by side trays */}
+        <div className="taskbar-apps mx-0.5 flex min-w-0 flex-1 items-center justify-center gap-0 overflow-x-auto sm:mx-1 sm:gap-1">
           {taskbarKeys.map((key) => {
             const cfg = TASKS[key];
             const Icon = cfg.icon;
@@ -1422,18 +1439,16 @@ export function CaretakerGame() {
                 title={cfg.name}
                 aria-label={cfg.name}
                 onClick={() => openApp(key)}
-                className={`group/tb relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-all hover:bg-white/10 active:scale-95 sm:h-9 sm:w-9 ${open ? "bg-white/15 ring-1 ring-white/20" : ""}`}
+                className={`group/tb relative flex h-10 w-9 shrink-0 items-center justify-center rounded-lg transition-all hover:bg-white/10 active:scale-95 sm:h-9 sm:w-9 ${open ? "bg-white/15 ring-1 ring-white/20" : ""}`}
               >
                 <span className="taskbar-tip hidden sm:block">{cfg.name}</span>
-                <Icon className="h-5 w-5 sm:h-4 sm:w-4" />
-                {/* Running indicator */}
+                <Icon className="h-[18px] w-[18px] sm:h-4 sm:w-4" />
                 {running && (
-                  <span className="absolute bottom-1 left-1/2 h-0.5 w-4 -translate-x-1/2 rounded-full bg-sky-400 sm:bottom-0.5" />
+                  <span className="absolute bottom-0.5 left-1/2 h-0.5 w-3.5 -translate-x-1/2 rounded-full bg-sky-400" />
                 )}
-                {/* Badge: fix available / attention */}
                 {(needsFix || status === "attention") && !running && (
                   <span
-                    className={`absolute right-1 top-1 h-2 w-2 rounded-full sm:right-0.5 sm:top-0.5 ${
+                    className={`absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full sm:right-0.5 sm:top-0.5 sm:h-2 sm:w-2 ${
                       needsFix ? "bg-red-400" : "bg-amber-400"
                     }`}
                   />
@@ -1442,8 +1457,11 @@ export function CaretakerGame() {
             );
           })}
         </div>
-        <div className="flex shrink-0 items-center gap-1 pr-1 sm:gap-2 sm:pr-4">
-          <div className="hidden items-center gap-1 text-sm sm:flex">
+
+        {/* Right tray */}
+        <div className="flex h-full shrink-0 items-center gap-0.5 sm:gap-1 sm:pr-1">
+          {/* Desktop system tray */}
+          <div className="hidden items-center gap-0.5 text-sm sm:flex">
             <span className="flex h-9 w-9 items-center justify-center rounded-lg text-white/80">
               <Wifi className="h-4 w-4" />
             </span>
@@ -1459,6 +1477,7 @@ export function CaretakerGame() {
                 setStartOpen(false);
                 setSearchOpen(false);
                 setCalendarOpen(false);
+                setActionCenterOpen(false);
               }}
               className={`flex h-9 items-center gap-1 rounded-lg px-2 text-white/90 transition hover:bg-white/10 ${
                 batteryOpen ? "bg-white/15" : ""
@@ -1468,43 +1487,207 @@ export function CaretakerGame() {
               <span className="text-[11px] font-medium tabular-nums">100%</span>
             </button>
           </div>
-          {/* Mobile battery control */}
+
+          {/* Mobile Action Center trigger */}
           <button
             type="button"
-            aria-label="Battery status"
-            aria-expanded={batteryOpen}
+            aria-label="Action Center"
+            aria-expanded={actionCenterOpen}
             onClick={() => {
-              setBatteryOpen((v) => !v);
+              setActionCenterOpen((v) => !v);
               setStartOpen(false);
               setSearchOpen(false);
               setCalendarOpen(false);
+              setBatteryOpen(false);
             }}
-            className={`flex h-11 w-11 items-center justify-center rounded-2xl text-emerald-400 transition hover:bg-white/10 sm:hidden ${
-              batteryOpen ? "bg-white/15" : ""
+            className={`relative flex h-10 items-center gap-1 rounded-lg px-1.5 text-white/90 transition hover:bg-white/10 sm:hidden ${
+              actionCenterOpen ? "bg-white/15" : ""
             }`}
           >
-            <BatteryFull className="h-5 w-5" />
+            <Wifi className={`h-3.5 w-3.5 ${wifiOn ? "text-sky-300" : "text-white/35"}`} />
+            <Volume2 className="h-3.5 w-3.5 text-white/70" />
+            <BatteryFull className="h-3.5 w-3.5 text-emerald-400" />
+            <ChevronUp className={`h-3.5 w-3.5 transition ${actionCenterOpen ? "rotate-180" : ""}`} />
+            {toasts.some((t) => t.kind === "task" && !t.leaving) && (
+              <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-red-400" />
+            )}
           </button>
+
           <button
             type="button"
             onClick={() => {
-              setCalendarOpen((v) => !v);
-              setStartOpen(false);
-              setSearchOpen(false);
-              setBatteryOpen(false);
+              if (isMobile) {
+                setActionCenterOpen((v) => !v);
+                setStartOpen(false);
+                setBatteryOpen(false);
+              } else {
+                setCalendarOpen((v) => !v);
+                setStartOpen(false);
+                setSearchOpen(false);
+                setBatteryOpen(false);
+                setActionCenterOpen(false);
+              }
             }}
-            className="min-h-11 min-w-[2.75rem] text-right leading-none sm:min-h-0"
+            className="hidden min-h-0 text-right leading-none sm:block sm:min-w-[2.75rem]"
           >
             <div className="text-[11px] font-medium sm:text-sm">{clock.time}</div>
             <div className="text-[9px] text-white/60 sm:text-[10px]">{clock.date}</div>
           </button>
-          <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-emerald-400/20 sm:h-6 sm:w-6">
-            <div className={`text-[11px] font-bold sm:text-[10px] ${tone.color}`}>{Math.floor(health)}</div>
+          <div className="hidden h-6 w-6 items-center justify-center rounded-lg bg-emerald-400/20 sm:flex">
+            <div className={`text-[10px] font-bold ${tone.color}`}>{Math.floor(health)}</div>
           </div>
         </div>
       </div>
 
-      {batteryOpen && (
+
+      {/* Mobile Action Center — quick settings + battery + notifications */}
+      {actionCenterOpen && isMobile && (
+        <div
+          className="fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] left-2 right-2 z-[76] max-h-[min(72dvh,560px)] overflow-y-auto rounded-2xl border border-white/10 bg-[#1a1a1c]/96 p-3 shadow-2xl backdrop-blur-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="mb-3 flex items-center justify-between px-1">
+            <div>
+              <p className="text-sm font-semibold">{clock.time}</p>
+              <p className="text-[11px] text-white/50">{clock.date}, 2026</p>
+            </div>
+            <button
+              type="button"
+              aria-label="Close Action Center"
+              onClick={() => setActionCenterOpen(false)}
+              className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-white/10"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* Quick tiles — Win11 style */}
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => setWifiOn((v) => !v)}
+              className={`flex flex-col items-start rounded-xl p-3 text-left transition ${
+                wifiOn ? "bg-sky-500 text-white" : "bg-white/10 text-white/70"
+              }`}
+            >
+              <Wifi className="h-5 w-5" />
+              <span className="mt-2 text-[11px] font-medium">CyberNet</span>
+              <span className="text-[10px] opacity-80">{wifiOn ? "Connected" : "Off"}</span>
+            </button>
+            <button
+              type="button"
+              className="flex flex-col items-start rounded-xl bg-white/10 p-3 text-left text-white/70"
+            >
+              <Bluetooth className="h-5 w-5" />
+              <span className="mt-2 text-[11px] font-medium">Bluetooth</span>
+              <span className="text-[10px] opacity-80">Not connected</span>
+            </button>
+            <button
+              type="button"
+              className="flex flex-col items-start rounded-xl bg-white/10 p-3 text-left text-white/50"
+            >
+              <Plane className="h-5 w-5" />
+              <span className="mt-2 text-[11px] font-medium">Airplane</span>
+              <span className="text-[10px] opacity-80">Off</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setNightLight((v) => !v)}
+              className={`flex flex-col items-start rounded-xl p-3 text-left transition ${
+                nightLight ? "bg-sky-500 text-white" : "bg-white/10 text-white/70"
+              }`}
+            >
+              <span className="text-base leading-none" aria-hidden>☾</span>
+              <span className="mt-2 text-[11px] font-medium">Night light</span>
+              <span className="text-[10px] opacity-80">{nightLight ? "On" : "Off"}</span>
+            </button>
+            <button
+              type="button"
+              className="col-span-2 flex flex-col items-start rounded-xl bg-emerald-500/20 p-3 text-left text-emerald-200"
+            >
+              <BatteryFull className="h-5 w-5 text-emerald-400" />
+              <span className="mt-2 text-[11px] font-medium">Battery 100%</span>
+              <span className="text-[10px] text-emerald-200/70">Plugged in · health 42%</span>
+            </button>
+          </div>
+
+          <div className="mt-3 flex items-center gap-3 rounded-xl bg-white/5 px-3 py-2.5">
+            <Volume2 className="h-4 w-4 shrink-0 text-white/70" />
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={volumeLevel}
+              onChange={(e) => setVolumeLevel(Number(e.target.value))}
+              className="h-1.5 w-full cursor-pointer accent-sky-400"
+              aria-label="Volume"
+            />
+            <span className="w-8 text-right font-mono text-[10px] text-white/50">{volumeLevel}</span>
+          </div>
+
+          <div className="mt-3 rounded-xl border border-white/10 bg-black/30 p-3">
+            <p className="text-[11px] leading-relaxed text-white/70">
+              Charged to 100% for over <span className="font-semibold text-white">3369 days</span>.
+              Battery health is <span className="font-semibold text-amber-300">42%</span>.
+            </p>
+            <p className="mt-1 text-[10px] text-white/40">Estimated remaining: forever* (AC adapter)</p>
+          </div>
+
+          <div className="mt-3">
+            <p className="mb-2 px-0.5 text-[10px] font-semibold uppercase tracking-wider text-white/45">
+              Notifications
+            </p>
+            {toasts.filter((t) => !t.leaving).length === 0 ? (
+              <p className="rounded-xl bg-white/5 px-3 py-4 text-center text-xs text-white/40">
+                No new notifications
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {toasts
+                  .filter((t) => !t.leaving)
+                  .map((toast) => (
+                    <div
+                      key={toast.id}
+                      className="flex gap-2 rounded-xl border border-white/10 bg-zinc-900/90 p-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{toast.title}</p>
+                        <p className="mt-0.5 text-[11px] text-white/50">
+                          {toast.body ||
+                            (toast.kind === "task"
+                              ? `${PRODUCT_NAME} needs attention`
+                              : "Notification")}
+                        </p>
+                      </div>
+                      {toast.kind === "task" && toast.appKey ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            dismissToast(toast.id, toast.appKey);
+                            setActionCenterOpen(false);
+                          }}
+                          className="shrink-0 rounded-lg bg-white px-3 py-1.5 text-[10px] font-semibold text-black"
+                        >
+                          FIX
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => dismissToast(toast.id)}
+                          className="shrink-0 rounded-lg bg-white/15 px-3 py-1.5 text-[10px] font-medium"
+                        >
+                          OK
+                        </button>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {batteryOpen && !isMobile && (
         <div
           className="fixed bottom-[4.25rem] right-2 z-[75] w-[min(100vw-1rem,300px)] overflow-hidden rounded-2xl border border-white/10 bg-[#1c1c1e]/95 shadow-2xl backdrop-blur-xl sm:bottom-16 sm:right-4"
           onClick={(e) => e.stopPropagation()}
@@ -1597,7 +1780,7 @@ export function CaretakerGame() {
       )}
 
       <div
-        className="toast-stack pointer-events-none fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] left-2 right-2 z-[80] flex flex-col-reverse gap-2 sm:bottom-16 sm:left-auto sm:right-6 sm:w-80 sm:max-w-[calc(100vw-1.5rem)] sm:gap-2.5"
+        className="toast-stack pointer-events-none fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] left-2 right-2 z-[80] hidden flex-col-reverse gap-2 sm:bottom-16 sm:left-auto sm:right-6 sm:flex sm:w-80 sm:max-w-[calc(100vw-1.5rem)] sm:gap-2.5"
       >
         {toasts.map((toast) => (
           <ToastCard

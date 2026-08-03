@@ -437,3 +437,14 @@
 .health-expand {
   transition: max-height 200ms ease, opacity 160ms ease;
 }
+
+/* Night light (Action Center) — warm overlay */
+.night-light-on::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: rgb(255 160 60 / 0.12);
+  mix-blend-mode: multiply;
+}
