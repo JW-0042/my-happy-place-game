@@ -503,3 +503,15 @@
     opacity: 1;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .window-shell,
+  .toast-enter,
+  .boot-dot,
+  .health-critical,
+  .confetti-piece,
+  .og-banner,
+  .icon-status-urgent {
+    animation: none !important;
+  }
+}

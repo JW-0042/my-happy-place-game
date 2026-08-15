@@ -284,6 +284,33 @@ export const DRAIN_BY_LEVEL: Record<1 | 2 | 3, number> = {
 /** Extra drain added per Remote Support call (stacks). */
 export const SUPPORT_DRAIN_BUMP = 0.035;
 
+/** Health deltas */
+export const HEAL_ON_COMPLETE = 24;
+export const PENALTY_CANCEL = 14;
+export const PENALTY_IGNORE_TOAST = 11;
+
+/** Basic (crash) persist interval — not every tick. */
+export const BASIC_SAVE_MS = 20_000;
+
+/** Toast auto-dismiss */
+export const TOAST_LIFE_MS = 9000;
+export const TOAST_LEAVE_MS = 350;
+export const TASK_TOAST_LIFE_MS = 10500;
+
+/** Throttle window progress React updates (~8 Hz). */
+export const PROGRESS_EMIT_MS = 120;
+
+export const BOOT_MS = 2800;
+export const WELCOME_DELAY_MS = 4800;
+export const TELEMETRY_REVERT_MS = 5000;
+export const CONFETTI_MS = 6500;
+export const CHECK_UPDATES_MS = 1400;
+export const BIOS_BSOD_DELAY_MS = 700;
+export const WINDOW_CLOSE_MS = 300;
+export const HEAL_GUARD_MS = 900;
+
+
+
 /**
  * Marketing / product line — NEVER change (Windows 3.11 gag stays forever).
  * Only BUILD increments.
@@ -295,7 +322,7 @@ export const VERSION_BASE = "11.3";
  * **Bump +1 on every shippable change** from now on.
  * Displayed as: 11.3.XXXXX
  */
-export const BUILD = 11;
+export const BUILD = 13;
 
 /** Full version string: 11.3.00001, 11.3.00002, … */
 export const VERSION = `${VERSION_BASE}.${String(BUILD).padStart(5, "0")}`;
