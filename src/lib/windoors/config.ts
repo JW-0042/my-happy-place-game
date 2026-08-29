@@ -322,7 +322,7 @@ export const VERSION_BASE = "11.3";
  * **Bump +1 on every shippable change** from now on.
  * Displayed as: 11.3.XXXXX
  */
-export const BUILD = 13;
+export const BUILD = 14;
 
 /** Full version string: 11.3.00001, 11.3.00002, … */
 export const VERSION = `${VERSION_BASE}.${String(BUILD).padStart(5, "0")}`;
@@ -330,9 +330,15 @@ export const VERSION = `${VERSION_BASE}.${String(BUILD).padStart(5, "0")}`;
 export const PRODUCT_NAME = "Windoors";
 export const FULL_TITLE = `Windoors ${VERSION_BASE} Caretaker`;
 
+/** Social share title — satire first, then the joke. */
+export const OG_TITLE = "Windoors 11.3 — a satirical PC caretaker game";
+
 /** Social / link-preview description */
 export const OG_DESCRIPTION =
-  "Keep System Health above 0 on Windoors 11.3. Run maintenance tools before pop-ups expire — ignore them and face the bluescreen. A nostalgic PC caretaker survival game.";
+  "An operating system that feels suspiciously familiar. Run updates, defrag, and security scans before System Health hits 0% — ignore the pop-ups and enjoy the bluescreen.";
+
+export const OG_IMAGE_ALT =
+  "Windoors 11.3 Caretaker: a satirical desktop with System Health in the red. Not the real OS — that's the joke.";
 
 /** Public path for Open Graph / Twitter card image (1200×630). */
 export const OG_IMAGE_PATH = "/og.png";

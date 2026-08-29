@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>OG</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+        background: #0b1220;
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+        color: #fff;
+      }
+      .card {
+        position: relative;
+        width: 1200px;
+        height: 630px;
+      }
+      .bg {
+        position: absolute;
+        inset: 0;
+        background: url("og-bg.jpg") center / cover no-repeat;
+        filter: saturate(1.08) contrast(1.05);
+      }
+      .shade {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          90deg,
+          rgba(7, 12, 24, 0.94) 0%,
+          rgba(7, 12, 24, 0.78) 38%,
+          rgba(7, 12, 24, 0.28) 62%,
+          rgba(7, 12, 24, 0.12) 100%
+        );
+      }
+      .copy {
+        position: absolute;
+        left: 72px;
+        top: 88px;
+        width: 560px;
+      }
+      .kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 18px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: #9ec4ff;
+        font-weight: 600;
+      }
+      .logo {
+        width: 34px;
+        height: 34px;
+      }
+      h1 {
+        margin: 22px 0 0;
+        font-size: 74px;
+        line-height: 0.95;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+      }
+      h1 span {
+        display: block;
+        font-size: 34px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: #c7d7f5;
+        margin-top: 8px;
+      }
+      p {
+        margin: 28px 0 0;
+        font-size: 28px;
+        line-height: 1.35;
+        color: rgba(255, 255, 255, 0.88);
+        max-width: 520px;
+      }
+      .chip {
+        margin-top: 36px;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 16px;
+        border-radius: 999px;
+        background: rgba(239, 68, 68, 0.18);
+        border: 1px solid rgba(248, 113, 113, 0.45);
+        color: #fecaca;
+        font-size: 20px;
+        font-weight: 600;
+      }
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #f87171;
+      }
+      .foot {
+        position: absolute;
+        left: 72px;
+        bottom: 48px;
+        font-size: 18px;
+        color: rgba(255, 255, 255, 0.5);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="bg"></div>
+      <div class="shade"></div>
+      <div class="copy">
+        <div class="kicker">
+          <svg class="logo" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="2.1" y="1.7" width="9.4" height="6.55" rx="1.15" fill="#fff" />
+            <rect x="12.65" y="1.7" width="9.4" height="6.55" rx="1.15" fill="#e8eefc" />
+            <rect x="2.1" y="9.4" width="9.4" height="6.55" rx="1.15" fill="#f4f7ff" />
+            <rect x="12.65" y="9.4" width="9.4" height="6.55" rx="1.15" fill="#dce6f8" />
+            <rect x="2.1" y="17.1" width="9.4" height="6.55" rx="1.15" fill="#e6edf8" />
+            <rect x="12.65" y="17.1" width="9.4" height="6.55" rx="1.15" fill="#c9d6ee" />
+          </svg>
+          Satire · PC caretaker
+        </div>
+        <h1>Windoors 11.3<span>Caretaker</span></h1>
+        <p>A funny survival game in an OS that feels suspiciously familiar. Keep System Health above 0% — or enjoy the bluescreen.</p>
+        <div class="chip"><span class="dot"></span> Health 23% · CRITICAL</div>
+      </div>
+      <div class="foot">Not the real desktop. That’s the joke.</div>
+    </div>
+  </body>
+</html>
