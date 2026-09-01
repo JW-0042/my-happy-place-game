@@ -264,6 +264,11 @@
   .boot-dot {
     opacity: 0.85;
   }
+
+  .progress-marquee i,
+  .hourglass {
+    animation: none !important;
+  }
 }
 
 
@@ -515,3 +520,198 @@
     animation: none !important;
   }
 }
+
+/* Retro UI grammar — Win95 affordances inside a Win11 shell */
+.group-box {
+  margin: 0;
+  min-inline-size: 0;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  border-radius: 4px;
+  padding: 0.85rem 0.75rem 0.7rem;
+  background: rgb(0 0 0 / 0.22);
+}
+.group-box > legend {
+  padding: 0 0.4rem;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgb(255 255 255 / 0.62);
+}
+
+.window-shell button:focus-visible,
+.window-shell a:focus-visible,
+.window-shell input:focus-visible,
+.window-shell [tabindex]:focus-visible {
+  outline: 1px dotted #fff;
+  outline-offset: 2px;
+}
+
+.btn-default {
+  background: linear-gradient(180deg, #3b82f6, #1d4ed8);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.28),
+    0 0 0 2px rgb(37 99 235 / 0.85);
+}
+.btn-default:hover:not(:disabled) {
+  background: linear-gradient(180deg, #60a5fa, #2563eb);
+}
+
+.dialog-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.window-menubar {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+  background: rgb(15 18 28 / 0.55);
+  padding: 0 4px;
+  font-size: 12px;
+}
+.window-menubar > .relative > button {
+  padding: 3px 8px;
+  border-radius: 3px;
+  color: rgb(255 255 255 / 0.82);
+}
+.window-menubar > .relative > button:hover,
+.window-menubar > .relative > button.on {
+  background: rgb(255 255 255 / 0.1);
+}
+
+.menu-flyout {
+  position: absolute;
+  min-width: 180px;
+  padding: 4px 0;
+  border-radius: 8px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  background: rgb(28 28 30 / 0.97);
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.45);
+  z-index: 40;
+}
+.menu-flyout button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 6px 12px;
+  font-size: 12px;
+  text-align: left;
+  color: rgb(255 255 255 / 0.88);
+}
+.menu-flyout button:hover {
+  background: rgb(59 130 246 / 0.35);
+}
+.menu-flyout button span {
+  color: rgb(255 255 255 / 0.35);
+  font-size: 10px;
+}
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-top: 1px solid rgb(255 255 255 / 0.08);
+  background: rgb(12 14 22 / 0.8);
+  padding: 3px 8px;
+  font-size: 10px;
+  color: rgb(255 255 255 / 0.55);
+}
+
+.progress-marquee {
+  position: relative;
+  overflow: hidden;
+  height: 12px;
+  border-radius: 2px;
+  background: #1f2937;
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.45);
+}
+.progress-marquee i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 32%;
+  border-radius: 2px;
+  animation: marqueeSlide 1.15s linear infinite;
+}
+@keyframes marqueeSlide {
+  0% { left: -32%; }
+  100% { left: 100%; }
+}
+
+.hourglass-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgb(9 9 11 / 0.72);
+}
+.hourglass {
+  width: 22px;
+  height: 34px;
+  background:
+    linear-gradient(#e5e7eb, #e5e7eb) top / 100% 3px no-repeat,
+    linear-gradient(#e5e7eb, #e5e7eb) bottom / 100% 3px no-repeat,
+    linear-gradient(to bottom right, transparent 48%, #fbbf24 49% 51%, transparent 52%) 0 3px / 100% 14px no-repeat,
+    linear-gradient(to top right, transparent 48%, #f59e0b 49% 51%, transparent 52%) 0 17px / 100% 14px no-repeat;
+  border-left: 2px solid #d1d5db;
+  border-right: 2px solid #9ca3af;
+  animation: hourglassFlip 0.9s ease-in-out infinite;
+}
+@keyframes hourglassFlip {
+  0%, 40% { transform: rotate(0deg); }
+  50%, 90% { transform: rotate(180deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.property-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid rgb(255 255 255 / 0.12);
+}
+.property-tabs button {
+  margin-bottom: -1px;
+  padding: 0.4rem 0.85rem;
+  font-size: 12px;
+  color: rgb(255 255 255 / 0.65);
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+}
+.property-tabs button.on {
+  color: white;
+  background: rgb(24 24 27 / 0.9);
+  border-color: rgb(255 255 255 / 0.12);
+}
+
+.wallpaper-bliss {
+  background-color: #4a7a22;
+  background-image:
+    radial-gradient(ellipse 90% 45% at 50% 0%, #9fd4f0 0%, #6bb3d9 40%, transparent 58%),
+    radial-gradient(ellipse 70% 30% at 70% 72%, #c4e07a 0%, transparent 70%),
+    linear-gradient(180deg, #7ec8ea 0%, #b7d48a 52%, #5a8a2a 53%, #3d6418 100%);
+}
+.wallpaper-teal {
+  background-color: #008080;
+  background-image:
+    linear-gradient(180deg, #00a0a0 0%, #008080 40%, #006666 100%);
+}
+
+.cursor-wait-retro,
+.cursor-wait-retro * {
+  cursor: wait !important;
+}
+
+.tool-icon {
+  display: block;
+  flex-shrink: 0;
+}
+
+

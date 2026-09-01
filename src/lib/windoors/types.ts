@@ -13,6 +13,7 @@ export type WindowState = {
   z: number;
   closing: boolean;
   running: boolean;
+  preparing: boolean;
   complete: boolean;
   progress: number;
   phase: string;

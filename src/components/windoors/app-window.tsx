@@ -1,24 +1,37 @@
 import {
   useRef,
+  useState,
   memo,
   type CSSProperties,
-  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
+import { AlertTriangle, X } from "lucide-react";
 import {
-  AlertTriangle,
-  Download,
-  ExternalLink,
-  X,
-} from "lucide-react";
-import { COLOR_STYLES, CREATOR_X_HANDLE, CREATOR_X_URL, PRODUCT_NAME, TASKS } from "@/lib/windoors/config";
+  COLOR_STYLES,
+  CREATOR_X_HANDLE,
+  CREATOR_X_URL,
+  PRODUCT_NAME,
+  TASKS,
+  type WallpaperId,
+} from "@/lib/windoors/config";
 import { clamp } from "@/lib/windoors/layout";
 import type { WindowState } from "@/lib/windoors/types";
 import { DefragMap } from "@/components/windoors/defrag-map";
 import { SettingsPanel } from "@/components/windoors/settings-panel";
 import { UpdatePanel } from "@/components/windoors/update-panel";
 import { BrowserPanel, ChkdskPanel } from "@/components/windoors/tool-panels";
+import { ToolIcon } from "@/components/windoors/tool-icons";
+import {
+  DialogButtons,
+  GroupBox,
+  HelpDialog,
+  HourglassOverlay,
+  StatusBar,
+  SystemMenu,
+  WindowMenuBar,
+} from "@/components/windoors/retro-chrome";
 
 function AppWindowInner({
   win,
@@ -38,6 +51,13 @@ function AppWindowInner({
   windoorsActivated,
   trueOg,
   onActivateKey,
+  onAbout,
+  wallpaper,
+  nightLight,
+  volumeLevel,
+  onWallpaper,
+  onNightLight,
+  onVolume,
 }: {
   win: WindowState;
   isMobileLayout: boolean;
@@ -56,10 +76,17 @@ function AppWindowInner({
   windoorsActivated: boolean;
   trueOg: boolean;
   onActivateKey: (key: string) => { ok: boolean; trueOg?: boolean; reason?: string };
+  onAbout: () => void;
+  wallpaper: WallpaperId;
+  nightLight: boolean;
+  volumeLevel: number;
+  onWallpaper: (id: WallpaperId) => void;
+  onNightLight: (v: boolean) => void;
+  onVolume: (v: number) => void;
 }) {
   const cfg = TASKS[win.appKey];
   const styles = COLOR_STYLES[cfg.color];
-  const Icon = cfg.icon;
+  const [helpOpen, setHelpOpen] = useState(false);
   const drag = useRef<{ ox: number; oy: number } | null>(null);
   const resize = useRef<
     | {
@@ -128,12 +155,8 @@ function AppWindowInner({
       const maxW = window.innerWidth - 16;
       const maxH = window.innerHeight - 72;
 
-      if (r.edge.includes("e")) {
-        nextW = clamp(r.origW + dx, minW, maxW - r.origX);
-      }
-      if (r.edge.includes("s")) {
-        nextH = clamp(r.origH + dy, minH, maxH - r.origY);
-      }
+      if (r.edge.includes("e")) nextW = clamp(r.origW + dx, minW, maxW - r.origX);
+      if (r.edge.includes("s")) nextH = clamp(r.origH + dy, minH, maxH - r.origY);
       if (r.edge.includes("w")) {
         const maxDx = r.origW - minW;
         const applied = clamp(dx, -r.origX, maxDx);
@@ -165,29 +188,36 @@ function AppWindowInner({
   if (win.appKey === "scan" && win.needsUpdateFirst && !win.running) {
     body = (
       <>
-        <div className="mb-4 text-center font-medium text-amber-400">Definitions outdated</div>
-        <div className="mb-5 rounded-2xl border border-amber-400/40 bg-amber-950/50 p-4 sm:mb-6 sm:p-5">
+        <GroupBox legend="Virus & threat protection">
           <div className="flex gap-3">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
             <div className="text-sm leading-relaxed text-amber-50/90">
-              <p className="font-semibold text-amber-200">Virus & threat protection</p>
+              <p className="font-semibold text-amber-200">Definitions outdated</p>
               <p className="mt-1.5 text-xs text-white/70 sm:text-sm">
                 Security definitions are out of date. {PRODUCT_NAME} Security cannot run a scan until you install the latest definitions via <strong>{PRODUCT_NAME} Update</strong>.
               </p>
             </div>
           </div>
-        </div>
-        <button type="button" onClick={onOpenUpdate} className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 py-4 text-base font-semibold text-white shadow-lg transition-transform active:scale-[0.98] sm:py-5 sm:text-lg">
-          <Download className="h-5 w-5" />
-          Open {PRODUCT_NAME} Update
-        </button>
-        <button type="button" onClick={onStart} className="w-full rounded-xl border border-white/15 bg-white/5 py-3 text-sm font-medium text-white/70 transition hover:bg-white/10">
-          Start
-        </button>
+        </GroupBox>
+        <DialogButtons
+          primaryLabel={`Open ${PRODUCT_NAME} Update`}
+          onPrimary={onOpenUpdate}
+          onCancel={onCloseIdle}
+          onHelp={() => setHelpOpen(true)}
+        />
       </>
     );
   } else if (win.appKey === "update") {
-    body = <UpdatePanel win={win} styles={styles} onCheck={onCheckUpdates} onStart={onStart} />;
+    body = (
+      <UpdatePanel
+        win={win}
+        styles={styles}
+        onCheck={onCheckUpdates}
+        onStart={onStart}
+        onCancel={onCloseIdle}
+        onHelp={() => setHelpOpen(true)}
+      />
+    );
   } else if (win.appKey === "support") {
     body = (
       <>
@@ -203,9 +233,7 @@ function AppWindowInner({
           </p>
           <div
             className={`mt-3 rounded-xl px-3 py-2 text-[11px] font-medium ${
-              supportActive
-                ? "bg-cyan-500/15 text-cyan-200"
-                : "bg-white/5 text-white/55"
+              supportActive ? "bg-cyan-500/15 text-cyan-200" : "bg-white/5 text-white/55"
             }`}
           >
             {supportActive
@@ -255,7 +283,7 @@ function AppWindowInner({
             type="button"
             onClick={onCallSupport}
             disabled={supportActive}
-            className={`flex-1 rounded-xl py-4 text-sm font-semibold text-white shadow-lg transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 sm:text-base ${styles.button}`}
+            className="btn-default flex-1 rounded-lg py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45 sm:text-base"
           >
             {supportActive ? "On call…" : "Call support"}
           </button>
@@ -263,9 +291,16 @@ function AppWindowInner({
             type="button"
             onClick={onFinishSupport}
             disabled={!supportActive}
-            className="flex-1 rounded-xl border border-white/20 bg-white/10 py-4 text-sm font-semibold text-white transition hover:bg-white/15 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 sm:text-base"
+            className="flex-1 rounded-lg border border-white/20 bg-white/10 py-3 text-sm font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40 sm:text-base"
           >
             Finish support
+          </button>
+          <button
+            type="button"
+            onClick={() => setHelpOpen(true)}
+            className="rounded-lg border border-white/12 px-4 py-3 text-sm text-white/70 hover:bg-white/8"
+          >
+            Help
           </button>
         </div>
       </>
@@ -273,10 +308,8 @@ function AppWindowInner({
   } else if (win.appKey === "bios") {
     body = (
       <>
-        <div className={`mb-3 text-center text-sm font-medium ${styles.icon}`}>{win.phase || "Ready"}</div>
-        <div className={`mb-4 rounded-2xl border p-4 text-xs sm:p-5 ${styles.border}`}>
-          <p className="font-semibold text-orange-200">Platform firmware · UEFI capsule</p>
-          <p className="mt-2 leading-relaxed text-white/70">
+        <GroupBox legend="Platform firmware · UEFI capsule">
+          <p className="text-xs leading-relaxed text-white/70">
             Flashing system firmware rewrites power-management tables (ACPI _CST / _PSS),
             recalibrates the high-precision event timer, and tightens interrupt coalescing.
             Under sustained load this usually lowers idle wake frequency and heat-soak drift.
@@ -290,9 +323,9 @@ function AppWindowInner({
             <li>· Payload: F.26 signed capsule (RSA-2048)</li>
             <li>· Do not remove AC / interrupt flash cycle</li>
           </ul>
-        </div>
+        </GroupBox>
         {(win.running || win.progress > 0) && (
-          <div className="terminal-scan mb-4 h-28 overflow-auto rounded-2xl bg-black/60 p-3 font-mono text-[11px] text-orange-200/90">
+          <div className="terminal-scan mt-3 h-28 overflow-auto rounded-lg bg-black/60 p-3 font-mono text-[11px] text-orange-200/90">
             {win.progress < 25 && <div>→ Authenticating capsule signature…</div>}
             {win.progress >= 25 && <div>✓ Region map locked · starting SPI erase</div>}
             {win.progress >= 45 && <div>→ Programming blocks 0x000000–0x7FFFFF…</div>}
@@ -300,17 +333,16 @@ function AppWindowInner({
             {win.progress >= 90 && <div>→ Staging POST hand-off · reboot pending</div>}
           </div>
         )}
-        {!win.running && (
-          <button
-            type="button"
-            onClick={onStart}
-            className={`w-full rounded-xl py-4 text-base font-semibold text-white shadow-lg transition-transform active:scale-[0.98] sm:py-5 sm:text-lg ${styles.button}`}
-          >
-            Start
-          </button>
+        {!win.running && !win.preparing && (
+          <DialogButtons
+            primaryLabel="Start"
+            onPrimary={onStart}
+            onCancel={onCloseIdle}
+            onHelp={() => setHelpOpen(true)}
+          />
         )}
         {(win.running || win.progress > 0) && !win.complete && (
-          <div>
+          <div className="mt-3">
             <div className="progress-container h-3 bg-zinc-800">
               <div
                 className="progress-bar h-3"
@@ -328,8 +360,16 @@ function AppWindowInner({
         styles={styles}
         activated={windoorsActivated}
         trueOg={trueOg}
+        wallpaper={wallpaper}
+        nightLight={nightLight}
+        volumeLevel={volumeLevel}
         onActivate={onActivateKey}
         onClose={onCloseIdle}
+        onHelp={() => setHelpOpen(true)}
+        onWallpaper={onWallpaper}
+        onNightLight={onNightLight}
+        onVolume={onVolume}
+        onOpenUpdate={onOpenUpdate}
       />
     );
   } else if (win.appKey === "browser") {
@@ -342,40 +382,61 @@ function AppWindowInner({
         onStart={onStart}
         onClose={onCloseIdle}
         onPatch={onPatchWin}
+        onHelp={() => setHelpOpen(true)}
       />
     );
   } else {
     body = (
       <>
-        <div className={`mb-4 text-center font-medium ${styles.icon}`}>{win.phase || "Ready"}</div>
-        {win.appKey === "defrag" && <DefragMap progress={win.progress} running={win.running} seed={win.defragSeed} />}
+        {win.appKey === "defrag" && (
+          <GroupBox legend="Cluster map">
+            <DefragMap progress={win.progress} running={win.running} seed={win.defragSeed} />
+          </GroupBox>
+        )}
         {(win.appKey === "scan" || win.appKey === "sfc") && (
-          <div className="terminal-scan mb-5 h-36 overflow-auto rounded-2xl bg-black/60 p-3 font-mono text-xs text-emerald-300 sm:mb-6 sm:h-44 sm:p-4">
-            {win.running && win.appKey === "scan" && <div className="scan-line" />}
-            {win.logLines.length === 0 ? (
-              <span className="text-white/30">{win.running ? "Working…" : "Click Start to begin."}</span>
-            ) : (
-              win.logLines.map((line, i) => <div key={`${i}-${line}`}>{line}</div>)
-            )}
-          </div>
+          <GroupBox legend={win.appKey === "scan" ? "Scan log" : "SFC log"}>
+            <div className="terminal-scan h-32 overflow-auto font-mono text-xs text-emerald-300 sm:h-40">
+              {win.running && win.appKey === "scan" && <div className="scan-line" />}
+              {win.logLines.length === 0 ? (
+                <span className="text-white/30">{win.running ? "Working…" : "Click Start to begin."}</span>
+              ) : (
+                win.logLines.map((line, i) => <div key={`${i}-${line}`}>{line}</div>)
+              )}
+            </div>
+          </GroupBox>
         )}
         {win.appKey === "drivers" && (
-          <div className="mb-5 space-y-2 sm:mb-6 sm:space-y-3">
-            {win.drivers.map((d) => (
-              <div key={d.name} className="flex items-center justify-between rounded-xl bg-black/40 px-3 py-2 text-xs">
-                <span>{d.name}</span>
-                <span className={d.status === "Up to date" ? "text-emerald-400" : "text-amber-400"}>{d.status}</span>
-              </div>
-            ))}
-          </div>
+          <GroupBox legend="Devices">
+            <div className="space-y-2">
+              {win.drivers.map((d) => (
+                <div key={d.name} className="flex items-center justify-between rounded-lg bg-black/40 px-3 py-2 text-xs">
+                  <span>{d.name}</span>
+                  <span className={d.status === "Up to date" ? "text-emerald-400" : "text-amber-400"}>{d.status}</span>
+                </div>
+              ))}
+            </div>
+          </GroupBox>
         )}
-        {!win.running && (
-          <button type="button" onClick={onStart} className={`w-full rounded-xl py-4 text-base font-semibold text-white shadow-lg transition-transform active:scale-[0.98] sm:py-5 sm:text-lg ${styles.button}`}>
-            Start
-          </button>
+        {win.appKey === "cleanup" || win.appKey === "startup" ? (
+          <GroupBox legend={win.appKey === "cleanup" ? "Files to remove" : "Startup impact"}>
+            <p className="text-xs text-white/60">
+              {win.phase || "Ready"} —{" "}
+              {win.appKey === "cleanup"
+                ? "Temporary files, thumbnails, and a little hope."
+                : "Programs that launch at boot, except the ones that sneak back."}
+            </p>
+          </GroupBox>
+        ) : null}
+        {!win.running && !win.preparing && (
+          <DialogButtons
+            primaryLabel="Start"
+            onPrimary={onStart}
+            onCancel={onCloseIdle}
+            onHelp={() => setHelpOpen(true)}
+          />
         )}
         {(win.running || win.progress > 0) && !win.complete && (
-          <div>
+          <div className="mt-3">
             <div className="progress-container h-3 bg-zinc-800">
               <div className="progress-bar h-3" style={{ width: `${win.progress}%`, "--bar-color": styles.bar } as CSSProperties} />
             </div>
@@ -389,6 +450,8 @@ function AppWindowInner({
   return (
     <div
       className={`window-shell pointer-events-auto absolute flex flex-col overflow-hidden border border-white/10 ${win.closing ? "closing" : ""} ${
+        win.preparing ? "cursor-wait-retro" : ""
+      } ${
         isMobileLayout
           ? "inset-x-0 top-[4.5rem] bottom-14 !w-auto rounded-t-xl border-x-0 border-b-0 sm:inset-x-2 sm:top-14 sm:bottom-16 sm:rounded-xl sm:border"
           : "rounded-xl"
@@ -407,10 +470,11 @@ function AppWindowInner({
       onPointerDown={onFocus}
     >
       <div
-        className="titlebar-grad flex h-11 shrink-0 items-center border-b border-white/5 px-3 sm:h-10 sm:cursor-move sm:px-3"
+        className="titlebar-grad flex h-11 shrink-0 items-center border-b border-white/5 px-2 sm:h-10 sm:cursor-move sm:px-2"
         onPointerDown={isMobileLayout ? undefined : onTitleDown}
       >
-        <Icon className={`mr-2 h-4 w-4 shrink-0 sm:mr-3 ${styles.icon}`} />
+        <SystemMenu onClose={onCloseIdle} onAbout={onAbout} uid={`sys-${win.id}`} />
+        <ToolIcon app={win.appKey} uid={`win-${win.id}`} className="mr-1.5 h-4 w-4 shrink-0" />
         <span className="min-w-0 flex-1 truncate text-sm font-medium">{cfg.name}</span>
         {win.running && win.appKey !== "support" ? (
           <button type="button" onClick={onCancel} className="min-h-9 rounded-lg px-3 py-1.5 text-xs hover:bg-red-500 sm:min-h-0 sm:px-3">
@@ -422,74 +486,69 @@ function AppWindowInner({
           </button>
         )}
       </div>
+      {win.appKey !== "browser" && (
+        <WindowMenuBar onClose={onCloseIdle} onAbout={onAbout} onHelp={() => setHelpOpen(true)} />
+      )}
       <div
-        className={`min-h-0 flex-1 overscroll-contain bg-zinc-950 ${
+        className={`relative min-h-0 flex-1 overscroll-contain bg-zinc-950 ${
           win.appKey === "browser"
             ? "flex flex-col overflow-hidden p-0"
-            : "overflow-y-auto p-4 sm:p-6"
+            : "overflow-y-auto p-4 sm:p-5"
         }`}
       >
         {body}
+        {win.preparing && (
+          <HourglassOverlay
+            label={
+              win.appKey === "scan"
+                ? "Preparing to scan…"
+                : win.appKey === "bios"
+                  ? "Entering flash utility…"
+                  : win.appKey === "defrag"
+                    ? "Analyzing drive layout…"
+                    : win.appKey === "update"
+                      ? "Preparing install…"
+                      : "Please wait…"
+            }
+          />
+        )}
       </div>
+      {win.appKey !== "browser" && (
+        <StatusBar
+          left={
+            win.preparing
+              ? "Busy"
+              : win.running
+                ? `${win.phase || "Working…"} · ${Math.floor(win.progress)}%`
+                : win.complete
+                  ? "Finished"
+                  : "Ready"
+          }
+        />
+      )}
 
-      {/* Resize handles (desktop only) */}
+      {helpOpen &&
+        createPortal(
+          <HelpDialog appKey={win.appKey} onClose={() => setHelpOpen(false)} onAbout={onAbout} />,
+          document.body,
+        )}
+
       {!isMobileLayout && !win.closing && (
         <>
-          <div
-            role="presentation"
-            aria-hidden
-            className="absolute bottom-0 right-0 z-20 h-4 w-4 cursor-se-resize"
-            onPointerDown={(e) => onResizeDown(e, "se")}
-          >
+          <div role="presentation" aria-hidden className="absolute bottom-0 right-0 z-20 h-4 w-4 cursor-se-resize" onPointerDown={(e) => onResizeDown(e, "se")}>
             <div className="absolute bottom-1 right-1 h-2.5 w-2.5 border-b-2 border-r-2 border-white/35" />
           </div>
-          <div
-            role="presentation"
-            aria-hidden
-            className="absolute bottom-0 left-3 right-4 z-10 h-2 cursor-s-resize"
-            onPointerDown={(e) => onResizeDown(e, "s")}
-          />
-          <div
-            role="presentation"
-            aria-hidden
-            className="absolute bottom-4 right-0 top-11 z-10 w-2 cursor-e-resize"
-            onPointerDown={(e) => onResizeDown(e, "e")}
-          />
-          <div
-            role="presentation"
-            aria-hidden
-            className="absolute bottom-4 left-0 top-11 z-10 w-2 cursor-w-resize"
-            onPointerDown={(e) => onResizeDown(e, "w")}
-          />
-          <div
-            role="presentation"
-            aria-hidden
-            className="absolute left-3 right-4 top-0 z-10 h-1.5 cursor-n-resize"
-            onPointerDown={(e) => onResizeDown(e, "n")}
-          />
-          <div
-            role="presentation"
-            aria-hidden
-            className="absolute right-0 top-0 z-20 h-3 w-3 cursor-ne-resize"
-            onPointerDown={(e) => onResizeDown(e, "ne")}
-          />
-          <div
-            role="presentation"
-            aria-hidden
-            className="absolute left-0 top-0 z-20 h-3 w-3 cursor-nw-resize"
-            onPointerDown={(e) => onResizeDown(e, "nw")}
-          />
-          <div
-            role="presentation"
-            aria-hidden
-            className="absolute bottom-0 left-0 z-20 h-3 w-3 cursor-sw-resize"
-            onPointerDown={(e) => onResizeDown(e, "sw")}
-          />
+          <div role="presentation" aria-hidden className="absolute bottom-0 left-3 right-4 z-10 h-2 cursor-s-resize" onPointerDown={(e) => onResizeDown(e, "s")} />
+          <div role="presentation" aria-hidden className="absolute bottom-4 right-0 top-11 z-10 w-2 cursor-e-resize" onPointerDown={(e) => onResizeDown(e, "e")} />
+          <div role="presentation" aria-hidden className="absolute bottom-4 left-0 top-11 z-10 w-2 cursor-w-resize" onPointerDown={(e) => onResizeDown(e, "w")} />
+          <div role="presentation" aria-hidden className="absolute left-3 right-4 top-0 z-10 h-1.5 cursor-n-resize" onPointerDown={(e) => onResizeDown(e, "n")} />
+          <div role="presentation" aria-hidden className="absolute right-0 top-0 z-20 h-3 w-3 cursor-ne-resize" onPointerDown={(e) => onResizeDown(e, "ne")} />
+          <div role="presentation" aria-hidden className="absolute left-0 top-0 z-20 h-3 w-3 cursor-nw-resize" onPointerDown={(e) => onResizeDown(e, "nw")} />
+          <div role="presentation" aria-hidden className="absolute bottom-0 left-0 z-20 h-3 w-3 cursor-sw-resize" onPointerDown={(e) => onResizeDown(e, "sw")} />
         </>
       )}
     </div>
   );
 }
-
 
 export const AppWindow = memo(AppWindowInner);

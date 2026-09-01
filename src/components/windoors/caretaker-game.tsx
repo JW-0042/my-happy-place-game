@@ -17,8 +17,6 @@ import {
   APP_KEYS,
   BASIC_SAVE_MS,
   BIOS_BSOD_CHANCE,
-  COLOR_STYLES,
-  CREATOR_X_HANDLE,
   CREATOR_X_URL,
   DOCK_KEYS,
   DRAIN_BY_LEVEL,
@@ -26,6 +24,7 @@ import {
   HEAL_ON_COMPLETE,
   PENALTY_CANCEL,
   PENALTY_IGNORE_TOAST,
+  HOURGLASS_MS,
   PRODUCT_KEY,
   PRODUCT_NAME,
   PROGRESS_EMIT_MS,
@@ -36,6 +35,7 @@ import {
   TOAST_LIFE_MS,
   VERSION,
   type AppKey,
+  type WallpaperId,
 } from "@/lib/windoors/config";
 import { createTimerRegistry } from "@/lib/windoors/timers";
 import { useWindoorsStore } from "@/lib/windoors/store";
@@ -54,8 +54,11 @@ import { useClock, useFocusTrap, useIsNarrow } from "@/lib/windoors/hooks";
 import { applyScenario, emptyUpdateFields } from "@/lib/windoors/window-fields";
 import { pickUpdateScenario } from "@/lib/windoors/updates";
 import { WindoorsLogo } from "@/components/windoors/windoors-logo";
+import { ToolIcon } from "@/components/windoors/tool-icons";
 import { ToastCard } from "@/components/windoors/toast-card";
 import { AppWindow } from "@/components/windoors/app-window";
+import { AboutDialog } from "@/components/windoors/retro-chrome";
+import { playBsod, playDing, playStartup, unlockAudio } from "@/lib/windoors/sounds";
 import qrXProfile from "@/assets/qr-thimothybsirius.svg?url";
 
 const SCAN_FILES = ["ntdll.dll", "temp.tmp", "registry.key", "explorer.exe", "kernel32.dll", "bootmgr"];
@@ -71,6 +74,7 @@ export function CaretakerGame() {
   const timers = useRef(createTimerRegistry());
   const lastHealAt = useRef(0);
   const lastProgressEmit = useRef<Map<string, number>>(new Map());
+  const hourglassTimers = useRef<Map<string, number>>(new Map());
   const rngSeedRef = useRef(makeSeed());
   const rngRef = useRef(mulberry32(rngSeedRef.current));
   const persistBag = useRef({
@@ -86,6 +90,7 @@ export function CaretakerGame() {
     volumeLevel: 72,
     wifiOn: true,
     nightLight: false,
+    wallpaper: "bloom" as WallpaperId,
     rngSeed: 0,
   });
   const logoUid = reactId.replace(/:/g, "");
@@ -122,6 +127,8 @@ export function CaretakerGame() {
   const [volumeLevel, setVolumeLevel] = useState(72);
   const [wifiOn, setWifiOn] = useState(true);
   const [nightLight, setNightLight] = useState(false);
+  const [wallpaper, setWallpaper] = useState<WallpaperId>("bloom");
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [telemetryOptOut, setTelemetryOptOut] = useState(false);
   const telemetryTimer = useRef<number | null>(null);
   /** Post–Windoors Update restart dialog (BIOS uses its own cold boot path). */
@@ -141,7 +148,7 @@ export function CaretakerGame() {
   const markRemoteSession = useWindoorsStore((s) => s.markRemoteSession);
   const setSleepMode = useWindoorsStore((s) => s.setSleepMode);
   const setUnexpectedOpen = useWindoorsStore((s) => s.setUnexpectedOpen);
-  useFocusTrap(unexpectedOpen || updateRestartPrompt || startOpen || actionCenterOpen);
+  useFocusTrap(unexpectedOpen || updateRestartPrompt || startOpen || actionCenterOpen || aboutOpen);
 
   const nextId = useCallback(
     (prefix: string) => {
@@ -150,6 +157,40 @@ export function CaretakerGame() {
     },
     [reactId],
   );
+
+  useEffect(() => {
+    const unlock = () => unlockAudio();
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+
+  const prevBootScreen = useRef(true);
+  useEffect(() => {
+    if (prevBootScreen.current && !bootScreen && booted) {
+      playStartup(persistBag.current.volumeLevel);
+    }
+    prevBootScreen.current = bootScreen;
+  }, [bootScreen, booted]);
+
+  const heardToasts = useRef(new Set<string>());
+  useEffect(() => {
+    for (const t of toasts) {
+      if (!heardToasts.current.has(t.id) && (t.kind === "task" || t.kind === "welcome")) {
+        playDing(persistBag.current.volumeLevel);
+      }
+      heardToasts.current.add(t.id);
+    }
+  }, [toasts]);
+
+  const wasBsod = useRef(false);
+  useEffect(() => {
+    if (bsod && !wasBsod.current) playBsod(persistBag.current.volumeLevel);
+    wasBsod.current = bsod;
+  }, [bsod]);
 
   // Telemetry "opt-out" that re-enables itself (purely coincidental UX)
   useEffect(() => {
@@ -222,7 +263,8 @@ export function CaretakerGame() {
       volumeLevel: persistBag.current.volumeLevel,
       wifiOn: persistBag.current.wifiOn,
       nightLight: persistBag.current.nightLight,
-      rngSeed: rngSeedRef.current,
+      wallpaper: persistBag.current.wallpaper,
+      rngSeed: persistBag.current.rngSeed,
     }),
     [],
   );
@@ -245,6 +287,7 @@ export function CaretakerGame() {
       setVolumeLevel(s.volumeLevel);
       setWifiOn(s.wifiOn);
       setNightLight(s.nightLight);
+      setWallpaper(s.wallpaper ?? "bloom");
       rngSeedRef.current = s.rngSeed || makeSeed();
       rngRef.current = mulberry32(rngSeedRef.current);
       if (s.trueOg) setHealthAbs(100);
@@ -343,7 +386,12 @@ export function CaretakerGame() {
         endSupportSession();
       }
       cancelRaf(winId);
-      setWindows((list) => list.map((w) => (w.id === winId ? { ...w, closing: true, running: false } : w)));
+      const hg = hourglassTimers.current.get(winId);
+      if (hg != null) {
+        timers.current.clearTimeout(hg);
+        hourglassTimers.current.delete(winId);
+      }
+      setWindows((list) => list.map((w) => (w.id === winId ? { ...w, closing: true, running: false, preparing: false } : w)));
       if (penalize) applyHealth(-PENALTY_CANCEL);
       timers.current.timeout(() => {
         setWindows((list) => list.filter((w) => w.id !== winId));
@@ -435,6 +483,7 @@ export function CaretakerGame() {
           z: zSeq.current,
           closing: false,
           running: false,
+          preparing: false,
           complete: false,
           progress: 0,
           phase: needsUpdateFirst
@@ -509,7 +558,7 @@ export function CaretakerGame() {
   const startTask = useCallback(
     (winId: string, appKey: AppKey) => {
       // Remote Support uses Call/Finish, not the normal progress task
-      if (appKey === "support" || appKey === "browser") return;
+      if (appKey === "support" || appKey === "browser" || appKey === "settings") return;
 
       if (appKey === "scan") {
         const canScan =
@@ -570,8 +619,40 @@ export function CaretakerGame() {
         }
       }
 
-      const cfg = TASKS[appKey];
       const currentWin = windowsRef.current.find((w) => w.id === winId);
+      if (!currentWin || currentWin.running || currentWin.closing) return;
+
+      if (!currentWin.preparing) {
+        const reduced =
+          typeof window !== "undefined" &&
+          window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+        setWindows((list) =>
+          list.map((w) =>
+            w.id === winId
+              ? {
+                  ...w,
+                  preparing: true,
+                  phase:
+                    appKey === "scan"
+                      ? "Preparing to scan…"
+                      : appKey === "bios"
+                        ? "Entering flash utility…"
+                        : appKey === "defrag"
+                          ? "Analyzing drive layout…"
+                          : appKey === "update"
+                            ? "Preparing install…"
+                            : "Please wait…",
+                }
+              : w,
+          ),
+        );
+        const tid = timers.current.timeout(() => startTask(winId, appKey), reduced ? 40 : HOURGLASS_MS);
+        hourglassTimers.current.set(winId, tid);
+        return;
+      }
+      hourglassTimers.current.delete(winId);
+
+      const cfg = TASKS[appKey];
       let duration = cfg.duration + (Math.random() * 8000 - 4000);
       if (appKey === "chkdsk") {
         duration *= currentWin?.chkdskTest === "thorough" ? 1.45 : 0.72;
@@ -586,6 +667,7 @@ export function CaretakerGame() {
             ? {
                 ...w,
                 running: true,
+                preparing: false,
                 complete: false,
                 needsUpdateFirst: false,
                 progress: 0,
@@ -1137,7 +1219,17 @@ export function CaretakerGame() {
       if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement | null)?.isContentEditable) {
         return;
       }
+      if (e.key === "F1") {
+        setAboutOpen(true);
+        e.preventDefault();
+        return;
+      }
       if (e.key === "Escape") {
+        if (aboutOpen) {
+          setAboutOpen(false);
+          e.preventDefault();
+          return;
+        }
         if (startOpen || searchOpen || calendarOpen || batteryOpen || actionCenterOpen) {
           setStartOpen(false);
           setSearchOpen(false);
@@ -1159,7 +1251,7 @@ export function CaretakerGame() {
         const open = windowsRef.current.filter((w) => !w.closing);
         if (open.length === 0) return;
         const top = open.reduce((a, b) => (a.z >= b.z ? a : b));
-        if (!top.running && top.appKey !== "support" && top.appKey !== "browser") {
+        if (!top.running && !top.preparing && top.appKey !== "support" && top.appKey !== "browser" && top.appKey !== "settings") {
           startTask(top.id, top.appKey);
           e.preventDefault();
         }
@@ -1168,6 +1260,7 @@ export function CaretakerGame() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [
+    aboutOpen,
     actionCenterOpen,
     batteryOpen,
     bootScreen,
@@ -1203,12 +1296,13 @@ export function CaretakerGame() {
     volumeLevel,
     wifiOn,
     nightLight,
+    wallpaper,
     rngSeed: rngSeedRef.current,
   };
 
   return (
     <div
-      className={`desktop-wallpaper mobile-safe relative h-[100dvh] max-h-[100dvh] w-full touch-manipulation overflow-hidden text-white select-none sm:h-[calc(100dvh-var(--grok-banner-h,0px))] ${nightLight ? "night-light-on" : ""}`}
+      className={`desktop-wallpaper mobile-safe relative h-[100dvh] max-h-[100dvh] w-full touch-manipulation overflow-hidden text-white select-none sm:h-[calc(100dvh-var(--grok-banner-h,0px))] ${nightLight ? "night-light-on" : ""} ${wallpaper === "bliss" ? "wallpaper-bliss" : wallpaper === "teal" ? "wallpaper-teal" : ""}`}
       style={{
         height: "calc(100dvh - var(--grok-banner-h, 0px))",
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
@@ -1354,8 +1448,6 @@ export function CaretakerGame() {
         >
           {desktopIconKeys.map((key) => {
             const cfg = TASKS[key];
-            const Icon = cfg.icon;
-            const styles = COLOR_STYLES[cfg.color];
             const status = toolVisualStatus(key, toasts, windows);
             return (
               <button
@@ -1370,11 +1462,15 @@ export function CaretakerGame() {
                 }`}
               >
                 <div
-                  className={`flex items-center justify-center rounded-xl bg-gradient-to-br shadow-inner ${styles.badgeBg} ${statusRingClass(status)} ${
+                  className={`${statusRingClass(status)} ${
                     isMobile ? "h-12 w-12" : "h-12 w-12 sm:h-14 sm:w-14"
                   }`}
                 >
-                  <Icon className={`text-white ${isMobile ? "h-6 w-6" : "h-6 w-6 sm:h-7 sm:w-7"}`} strokeWidth={2.2} />
+                  <ToolIcon
+                    app={key}
+                    uid={`desk-${key}`}
+                    className={isMobile ? "h-12 w-12" : "h-12 w-12 sm:h-14 sm:w-14"}
+                  />
                 </div>
                 <p className={`mt-1 font-medium leading-tight drop-shadow-md ${isMobile ? "text-[10px]" : "mt-1.5 text-[10px] sm:mt-2 sm:text-xs"}`}>
                   {isMobile ? cfg.shortName : cfg.name}
@@ -1470,6 +1566,13 @@ export function CaretakerGame() {
             windoorsActivated={windoorsActivated}
             trueOg={trueOg}
             onActivateKey={activateWindoors}
+            onAbout={() => setAboutOpen(true)}
+            wallpaper={wallpaper}
+            nightLight={nightLight}
+            volumeLevel={volumeLevel}
+            onWallpaper={setWallpaper}
+            onNightLight={setNightLight}
+            onVolume={setVolumeLevel}
           />
         ))}
       </div>
@@ -1566,7 +1669,6 @@ export function CaretakerGame() {
         <div className="taskbar-apps mx-0.5 flex min-w-0 flex-1 items-center justify-center gap-0 overflow-x-auto sm:mx-1 sm:gap-1">
           {taskbarKeys.map((key) => {
             const cfg = TASKS[key];
-            const Icon = cfg.icon;
             const open = windows.some((w) => w.appKey === key && !w.closing);
             const running = windows.some((w) => w.appKey === key && w.running && !w.closing);
             const needsFix = toasts.some(
@@ -1583,7 +1685,7 @@ export function CaretakerGame() {
                 className={`group/tb relative flex h-10 w-9 shrink-0 items-center justify-center rounded-lg transition-all hover:bg-white/10 active:scale-95 sm:h-9 sm:w-9 ${open ? "bg-white/15 ring-1 ring-white/20" : ""}`}
               >
                 <span className="taskbar-tip hidden sm:block">{cfg.name}</span>
-                <Icon className="h-[18px] w-[18px] sm:h-4 sm:w-4" />
+                <ToolIcon app={key} uid={`tb-${key}`} className="h-[22px] w-[22px] sm:h-6 sm:w-6" />
                 {running && (
                   <span className="absolute bottom-0.5 left-1/2 h-0.5 w-3.5 -translate-x-1/2 rounded-full bg-sky-400" />
                 )}
@@ -1862,17 +1964,22 @@ export function CaretakerGame() {
               <div className="text-base font-semibold tracking-tight sm:text-lg">{PRODUCT_NAME}</div>
               <div className="text-xs text-white/55 sm:text-sm">Version {VERSION} · Caretaker</div>
             </div>
+            <button
+              type="button"
+              onClick={() => { setStartOpen(false); setAboutOpen(true); }}
+              className="ml-auto rounded-lg border border-white/10 px-3 py-1.5 text-[11px] text-white/70 hover:bg-white/10"
+            >
+              About
+            </button>
           </div>
           <div className="p-4 sm:p-6">
             <div className="mb-3 pl-1 text-xs uppercase tracking-widest text-white/50">Pinned</div>
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-3 sm:gap-3">
               {APP_KEYS.map((key) => {
                 const cfg = TASKS[key];
-                const Icon = cfg.icon;
-                const styles = COLOR_STYLES[cfg.color];
                 return (
-                  <button key={key} type="button" onClick={() => openApp(key)} className="flex flex-col items-center rounded-2xl bg-zinc-800 p-3 transition-all hover:bg-zinc-700 active:scale-95 sm:p-4">
-                    <Icon className={`mb-2 h-8 w-8 sm:h-9 sm:w-9 ${styles.icon}`} />
+                  <button key={key} type="button" onClick={() => openApp(key)} className="flex flex-col items-center rounded-2xl bg-zinc-800/80 p-3 transition-all hover:bg-zinc-700 active:scale-95 sm:p-4">
+                    <ToolIcon app={key} uid={`start-${key}`} className="mb-2 h-10 w-10 sm:h-11 sm:w-11" />
                     <span className="text-[10px] sm:text-xs">{cfg.shortName}</span>
                   </button>
                 );
@@ -1891,7 +1998,7 @@ export function CaretakerGame() {
                 </span>
                 <span className="mt-0.5 block text-[11px] leading-snug text-white/45">
                   Uncheck to opt out of sending typing cadence, window focus entropy, and
-                  ambient regret metrics to Macrohard*. (*Purely coincidental name.)
+                  ambient regret metrics to Megahard*. (*Purely coincidental name.)
                 </span>
                 {telemetryOptOut && (
                   <span className="mt-1 block text-[10px] text-amber-300/90">
@@ -1920,16 +2027,19 @@ export function CaretakerGame() {
           <div className="space-y-1">
             {APP_KEYS.map((key) => {
               const cfg = TASKS[key];
-              const Icon = cfg.icon;
               return (
                 <button key={key} type="button" onClick={() => openApp(key)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-white/10">
-                  <Icon className={`h-4 w-4 ${COLOR_STYLES[cfg.color].icon}`} />
+                  <ToolIcon app={key} uid={`search-${key}`} className="h-6 w-6" />
                   {cfg.name}
                 </button>
               );
             })}
           </div>
         </div>
+      )}
+
+      {aboutOpen && !bootScreen && !bsod && (
+        <AboutDialog onClose={() => setAboutOpen(false)} />
       )}
 
       {calendarOpen && (

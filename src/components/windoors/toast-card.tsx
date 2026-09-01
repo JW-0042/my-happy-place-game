@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
-import { COLOR_STYLES, PRODUCT_NAME, TASKS } from "@/lib/windoors/config";
+import { PRODUCT_NAME } from "@/lib/windoors/config";
 import type { Toast } from "@/lib/windoors/types";
+import { ToolIcon } from "@/components/windoors/tool-icons";
 
 export function ToastCard({
   toast,
@@ -59,11 +60,9 @@ export function ToastCard({
         <>
           <div className="min-w-0 flex-1">
             {(() => {
-              const cfg = TASKS[toast.appKey!];
-              const Icon = cfg.icon;
               return (
                 <div className="flex items-center gap-2">
-                  <Icon className={`h-4 w-4 shrink-0 ${COLOR_STYLES[cfg.color].icon}`} />
+                  <ToolIcon app={toast.appKey!} uid={`toast-${toast.id}`} className="h-5 w-5 shrink-0" />
                   <span className="truncate font-semibold">{toast.title}</span>
                 </div>
               );
@@ -82,11 +81,9 @@ export function ToastCard({
         <>
           <div className="min-w-0 flex-1">
             {(() => {
-              const cfg = TASKS[toast.appKey!];
-              const Icon = cfg.icon;
               return (
                 <div className="flex items-center gap-2">
-                  <Icon className={`h-4 w-4 shrink-0 ${COLOR_STYLES[cfg.color].icon}`} />
+                  <ToolIcon app={toast.appKey!} uid={`ok-${toast.id}`} className="h-5 w-5 shrink-0" />
                   <span className="truncate font-semibold text-emerald-300">{toast.title}</span>
                 </div>
               );

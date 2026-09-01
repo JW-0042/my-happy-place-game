@@ -3,6 +3,7 @@ import { Disc3, ExternalLink, HardDrive, Lock, RotateCw, Settings2 } from "lucid
 
 import { BROWSER_HOME, COLOR_STYLES } from "@/lib/windoors/config";
 import type { WindowState } from "@/lib/windoors/types";
+import { DialogButtons } from "@/components/windoors/retro-chrome";
 
 const CHKDSK_DRIVES: {
   id: WindowState["chkdskDrive"];
@@ -109,12 +110,14 @@ export function ChkdskPanel({
   onStart,
   onClose,
   onPatch,
+  onHelp,
 }: {
   win: WindowState;
   styles: (typeof COLOR_STYLES)[keyof typeof COLOR_STYLES];
   onStart: () => void;
   onClose: () => void;
   onPatch: (patch: Partial<WindowState>) => void;
+  onHelp: () => void;
 }) {
   const [showOptions, setShowOptions] = useState(false);
   const busy = win.running;
@@ -270,31 +273,22 @@ export function ChkdskPanel({
         </div>
       )}
 
-      {/* Actions — Start / Close / Advanced layout like classic */}
-      {!busy && !win.complete && (
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-          <button
-            type="button"
-            onClick={onStart}
-            className={`rounded-2xl px-6 py-3 text-sm font-semibold text-white shadow-lg transition-transform active:scale-[0.98] sm:order-1 ${styles.button}`}
-          >
-            Start
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-2xl border border-white/15 bg-white/5 px-6 py-3 text-sm font-medium text-white/80 hover:bg-white/10 sm:order-2"
-          >
-            Close
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowOptions(true)}
-            className="rounded-2xl border border-white/15 bg-white/5 px-6 py-3 text-sm font-medium text-white/70 hover:bg-white/10 sm:order-3"
-          >
-            Advanced…
-          </button>
-        </div>
+      {!busy && !win.complete && !win.preparing && (
+        <DialogButtons
+          primaryLabel="Start"
+          onPrimary={onStart}
+          onCancel={onClose}
+          onHelp={onHelp}
+          extra={
+            <button
+              type="button"
+              onClick={() => setShowOptions(true)}
+              className="mr-auto rounded-lg border border-white/15 bg-white/5 px-4 py-2.5 text-sm text-white/70 hover:bg-white/10"
+            >
+              Advanced…
+            </button>
+          }
+        />
       )}
 
       {busy && (

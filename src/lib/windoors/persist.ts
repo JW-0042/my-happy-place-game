@@ -1,4 +1,5 @@
 import type { DrainLevel, WindowState } from "@/lib/windoors/types";
+import type { WallpaperId } from "@/lib/windoors/config";
 import { makeSeed } from "@/lib/windoors/rng";
 
 export const SAVE_VERSION = 1;
@@ -19,6 +20,7 @@ export type BasicSave = {
   volumeLevel: number;
   wifiOn: boolean;
   nightLight: boolean;
+  wallpaper: WallpaperId;
   rngSeed: number;
 };
 
@@ -41,6 +43,7 @@ export function defaultBasicSave(): BasicSave {
     volumeLevel: 72,
     wifiOn: true,
     nightLight: false,
+    wallpaper: "bloom",
     rngSeed: makeSeed(),
   };
 }
@@ -68,6 +71,7 @@ function sanitizeWindows(windows: unknown): WindowState[] {
       return {
         ...win,
         running: false,
+        preparing: false,
         closing: false,
         complete: false,
       };

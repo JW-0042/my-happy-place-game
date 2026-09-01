@@ -1,19 +1,3 @@
-import type { LucideIcon } from "lucide-react";
-import {
-  Bolt,
-  CircleCheck,
-  Cpu,
-  Download,
-  FileCheck,
-  Globe,
-  HardDrive,
-  Headphones,
-  Microchip,
-  Settings,
-  ShieldHalf,
-  SprayCan,
-} from "lucide-react";
-
 export type AppKey =
   | "update"
   | "scan"
@@ -135,7 +119,6 @@ export type TaskConfig = {
   key: AppKey;
   name: string;
   shortName: string;
-  icon: LucideIcon;
   color: ColorKey;
   /** Base duration in ms (jitter applied at runtime). */
   duration: number;
@@ -148,7 +131,6 @@ export const TASKS: Record<AppKey, TaskConfig> = {
     key: "update",
     name: "Windoors Update",
     shortName: "Update",
-    icon: Download,
     color: "blue",
     duration: 52000,
     phases: ["Checking", "Downloading", "Installing", "Finalizing"],
@@ -158,7 +140,6 @@ export const TASKS: Record<AppKey, TaskConfig> = {
     key: "scan",
     name: "Windoors Security",
     shortName: "Scan",
-    icon: ShieldHalf,
     color: "green",
     duration: 34000,
     phases: ["Memory", "Files", "Registry", "Threats"],
@@ -168,7 +149,6 @@ export const TASKS: Record<AppKey, TaskConfig> = {
     key: "defrag",
     name: "Optimize Drives",
     shortName: "Defrag",
-    icon: HardDrive,
     color: "amber",
     duration: 68000,
     phases: ["Analyzing", "Defragmenting", "Optimizing", "Done"],
@@ -178,7 +158,6 @@ export const TASKS: Record<AppKey, TaskConfig> = {
     key: "cleanup",
     name: "Disk Cleanup",
     shortName: "Cleanup",
-    icon: SprayCan,
     color: "purple",
     duration: 17000,
     phases: ["Calculating", "Cleaning", "Removing"],
@@ -188,7 +167,6 @@ export const TASKS: Record<AppKey, TaskConfig> = {
     key: "chkdsk",
     name: "Check Disk",
     shortName: "Check Disk",
-    icon: CircleCheck,
     color: "teal",
     duration: 29000,
     phases: ["Index", "Files", "Security", "Recovery", "Complete"],
@@ -198,7 +176,6 @@ export const TASKS: Record<AppKey, TaskConfig> = {
     key: "sfc",
     name: "System File Checker",
     shortName: "SFC",
-    icon: FileCheck,
     color: "indigo",
     duration: 43000,
     phases: ["Scanning", "Verifying", "Repairing"],
@@ -208,7 +185,6 @@ export const TASKS: Record<AppKey, TaskConfig> = {
     key: "drivers",
     name: "Driver Updater",
     shortName: "Drivers",
-    icon: Microchip,
     color: "sky",
     duration: 31000,
     phases: ["Scanning", "Downloading", "Installing"],
@@ -218,7 +194,6 @@ export const TASKS: Record<AppKey, TaskConfig> = {
     key: "startup",
     name: "Startup Optimizer",
     shortName: "Startup",
-    icon: Bolt,
     color: "rose",
     duration: 15000,
     phases: ["Analyzing", "Disabling", "Optimizing"],
@@ -228,7 +203,6 @@ export const TASKS: Record<AppKey, TaskConfig> = {
     key: "bios",
     name: "BIOS (UEFI) Update",
     shortName: "BIOS",
-    icon: Cpu,
     color: "orange",
     duration: 48000,
     phases: ["Validating", "Erasing SPI", "Flashing", "Verifying capsule"],
@@ -238,7 +212,6 @@ export const TASKS: Record<AppKey, TaskConfig> = {
     key: "support",
     name: "Remote Support",
     shortName: "Support",
-    icon: Headphones,
     color: "cyan",
     duration: 1,
     phases: ["Connected"],
@@ -248,7 +221,6 @@ export const TASKS: Record<AppKey, TaskConfig> = {
     key: "browser",
     name: "Internet Discovery Browser",
     shortName: "Browser",
-    icon: Globe,
     color: "slate",
     duration: 1,
     phases: ["Browsing"],
@@ -258,7 +230,6 @@ export const TASKS: Record<AppKey, TaskConfig> = {
     key: "settings",
     name: "Settings",
     shortName: "Settings",
-    icon: Settings,
     color: "slate",
     duration: 1,
     phases: ["Configured"],
@@ -308,6 +279,14 @@ export const CHECK_UPDATES_MS = 1400;
 export const BIOS_BSOD_DELAY_MS = 700;
 export const WINDOW_CLOSE_MS = 300;
 export const HEAL_GUARD_MS = 900;
+export const HOURGLASS_MS = 620;
+
+export type WallpaperId = "bloom" | "bliss" | "teal";
+export const WALLPAPERS: { id: WallpaperId; label: string; hint: string }[] = [
+  { id: "bloom", label: "Bloom", hint: "Default twilight (suspiciously familiar)" },
+  { id: "bliss", label: "Blss", hint: "A green hill. You know the one." },
+  { id: "teal", label: "Teal", hint: "Hotdog stand optional. Desktop required." },
+];
 
 
 
@@ -322,7 +301,7 @@ export const VERSION_BASE = "11.3";
  * **Bump +1 on every shippable change** from now on.
  * Displayed as: 11.3.XXXXX
  */
-export const BUILD = 14;
+export const BUILD = 18;
 
 /** Full version string: 11.3.00001, 11.3.00002, … */
 export const VERSION = `${VERSION_BASE}.${String(BUILD).padStart(5, "0")}`;
@@ -338,7 +317,7 @@ export const OG_DESCRIPTION =
   "An operating system that feels suspiciously familiar. Run updates, defrag, and security scans before System Health hits 0% — ignore the pop-ups and enjoy the bluescreen.";
 
 export const OG_IMAGE_ALT =
-  "Windoors 11.3 Caretaker: a satirical desktop with System Health in the red. Not the real OS — that's the joke.";
+  "Windoors 11.3 Caretaker: satirical desktop with Start menu, tool icons, and System Health at 23%. Not the real OS — that's the joke.";
 
 /** Public path for Open Graph / Twitter card image (1200×630). */
 export const OG_IMAGE_PATH = "/og.png";

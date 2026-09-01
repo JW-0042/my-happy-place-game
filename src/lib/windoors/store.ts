@@ -63,6 +63,7 @@ export const useWindoorsStore = create<WindoorsStore>((set, get) => ({
         volumeLevel: sleep.volumeLevel,
         wifiOn: sleep.wifiOn,
         nightLight: sleep.nightLight,
+        wallpaper: sleep.wallpaper ?? "bloom",
         rngSeed: sleep.rngSeed,
         restoreKind: "sleep",
         unexpectedOpen: false,
@@ -86,6 +87,7 @@ export const useWindoorsStore = create<WindoorsStore>((set, get) => ({
         volumeLevel: basic.volumeLevel,
         wifiOn: basic.wifiOn,
         nightLight: basic.nightLight,
+        wallpaper: basic.wallpaper ?? "bloom",
         rngSeed: basic.rngSeed,
         restoreKind: "crash",
         unexpectedOpen: true,
@@ -137,6 +139,7 @@ export function snapshotFromStore(): PersistSlice {
     volumeLevel: s.volumeLevel,
     wifiOn: s.wifiOn,
     nightLight: s.nightLight,
+    wallpaper: s.wallpaper ?? "bloom",
     rngSeed: s.rngSeed,
   };
 }
